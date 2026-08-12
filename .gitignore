@@ -1,0 +1,27 @@
+# Byte-compiled
+__pycache__/
+*.py[cod]
+
+# Virtual environment
+.venv/
+venv/
+node_modules/
+
+# Environment
+.env
+*.local
+
+# Uploads (not tracked)
+server/uploads/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build output
+client/dist/
