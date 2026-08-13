@@ -7,6 +7,13 @@
 
     <!-- 筛选 -->
     <div class="filter-bar">
+      <el-input
+        v-model="searchKeywords"
+        placeholder="搜索作品名称（多个用_分隔，如：作品1_作品2）"
+        clearable
+        @input="loadData"
+        style="width: 320px; margin-right: 12px"
+      />
       <el-select v-model="filterCompanyId" placeholder="代理主体" clearable @change="onCompanyChange" style="margin-right:12px">
         <el-option v-for="c in companyOptions" :key="c.id" :label="c.company_name" :value="c.id" />
       </el-select>
@@ -94,6 +101,7 @@ const loading = ref(false)
 const submitting = ref(false)
 const filterCompanyId = ref(null)
 const filterAgentId = ref(null)
+const searchKeywords = ref('')
 
 const addDialogVisible = ref(false)
 const addForm = reactive({
@@ -116,6 +124,7 @@ async function loadData() {
     const params = {}
     if (filterCompanyId.value) params.company_id = filterCompanyId.value
     if (filterAgentId.value) params.agent_id = filterAgentId.value
+    if (searchKeywords.value) params.search = searchKeywords.value
     const res = await getWorks(params)
     if (res.success) works.value = res.data
   } finally {

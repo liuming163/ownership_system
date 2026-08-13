@@ -15,7 +15,8 @@ work_bp = Blueprint('works', __name__, url_prefix='/api/works')
 def list_works():
     company_id = request.args.get('company_id', type=int)
     agent_id = request.args.get('agent_id', type=int)
-    data = work_service.list_works(company_id, agent_id)
+    search_keywords = request.args.get('search', '').strip()
+    data = work_service.list_works(company_id, agent_id, search_keywords)
     return success(data)
 
 

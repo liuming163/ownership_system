@@ -7,7 +7,7 @@ from sqlalchemy import text
 from ..extensions import get_db_session
 
 
-def list_works(company_id=None, agent_id=None):
+def list_works(company_id=None, agent_id=None, search_keywords=None):
     with get_db_session() as session:
         conditions = []
         params = {}
@@ -17,6 +17,17 @@ def list_works(company_id=None, agent_id=None):
         if agent_id:
             conditions.append('w.agent_id = :agent_id')
             params['agent_id'] = agent_id
+
+        # 模糊搜索：按 _ 分隔关键词，OR 关系
+        if search_keywords:
+            keywords = [kw.strip() for kw in search_keywords.split('_') if kw.strip()]
+            if keywords:
+                or_parts = []
+                for idx, kw in enumerate(keywords):
+                    param_name = f'kw{idx}'
+                    or_parts.append(f'w.work_name LIKE :{param_name}')
+                    params[param_name] = f'%{kw}%'
+                conditions.append(f"({' OR '.join(or_parts)})")
 
         where = f"WHERE {' AND '.join(conditions)}" if conditions else ''
         rows = session.execute(text(f"""
