@@ -40,7 +40,16 @@
       </el-table-column>
       <el-table-column label="其他证明" width="100" align="center">
         <template #default="{ row }">
-          <span>{{ (row.other_files || []).length }}个</span>
+          <el-button
+            v-if="(row.other_files || []).length > 0"
+            type="primary"
+            link
+            size="small"
+            @click="showOtherFiles(row)"
+          >
+            查看({{ row.other_files.length }})
+          </el-button>
+          <span v-else>-</span>
         </template>
       </el-table-column>
       <el-table-column prop="created_by" label="创建人" width="100" />
@@ -88,12 +97,31 @@
         <el-button type="primary" :loading="submitting" @click="handleAdd">确定</el-button>
       </template>
     </el-dialog>
+
+    <!-- 查看其他证明弹窗 -->
+    <el-dialog v-model="otherFilesDialogVisible" title="其他证明文件" width="450px">
+      <div class="other-files-list">
+        <div
+          v-for="(file, index) in currentOtherFiles"
+          :key="index"
+          class="file-item"
+          @click="viewFile('权属证明', file)"
+        >
+          <el-icon><Document /></el-icon>
+          <span class="file-name">{{ file }}</span>
+        </div>
+      </div>
+      <template #footer>
+        <el-button @click="otherFilesDialogVisible = false">关闭</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
 import { ref, reactive, onMounted, onUnmounted } from 'vue'
 import { ElMessage } from 'element-plus'
+import { Document } from '@element-plus/icons-vue'
 import { getWorks, createWork, deleteWork } from '../api/work'
 import { getCompanies } from '../api/company'
 import { getAgents } from '../api/agent'
@@ -119,6 +147,8 @@ onUnmounted(() => clearTimeout(searchTimer))
 const addDialogVisible = ref(false)
 const proofUploadRef = ref(null)
 const otherUploadRef = ref(null)
+const otherFilesDialogVisible = ref(false)
+const currentOtherFiles = ref([])
 const addForm = reactive({
   company_id: null,
   agent_id: null,
@@ -258,6 +288,11 @@ function viewFile(folder, filename) {
   if (!filename) return
   window.open(`/api/files/${folder}/${filename}`, '_blank')
 }
+
+function showOtherFiles(row) {
+  currentOtherFiles.value = row.other_files || []
+  otherFilesDialogVisible.value = true
+}
 </script>
 
 <style scoped>
@@ -265,4 +300,29 @@ function viewFile(folder, filename) {
 .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
 .filter-bar { margin-bottom: 16px; display: flex; align-items: center; }
 .search-warning { margin-bottom: 12px; color: #f56c6c; font-size: 14px; }
+.other-files-list { max-height: 400px; overflow-y: auto; }
+.file-item {
+  display: flex;
+  align-items: center;
+  padding: 12px;
+  margin-bottom: 8px;
+  border: 1px solid #ebeef5;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.file-item:hover {
+  background: #f5f7fa;
+  border-color: #409eff;
+}
+.file-item .el-icon {
+  margin-right: 8px;
+  font-size: 18px;
+  color: #409eff;
+}
+.file-name {
+  flex: 1;
+  color: #606266;
+  word-break: break-all;
+}
 </style>
