@@ -11,13 +11,13 @@
         v-model="searchKeywords"
         placeholder="搜索作品名称（多个用_分隔，如：作品1_作品2）"
         clearable
-        @input="loadData"
-        style="width: 320px; margin-right: 12px"
+        @input="onSearchInput"
+        style="margin-right: 12px; flex: 1"
       />
-      <el-select v-model="filterCompanyId" placeholder="代理主体" clearable @change="onCompanyChange" style="margin-right:12px">
+      <el-select v-model="filterCompanyId" placeholder="代理主体" clearable @change="onCompanyChange" style="width: 320px; margin-right: 12px">
         <el-option v-for="c in companyOptions" :key="c.id" :label="c.company_name" :value="c.id" />
       </el-select>
-      <el-select v-model="filterAgentId" placeholder="被代理人" clearable @change="loadData">
+      <el-select v-model="filterAgentId" placeholder="被代理人" clearable @change="loadData" style="width: 320px">
         <el-option v-for="a in agentOptions" :key="a.id" :label="a.agent_name" :value="a.id" />
       </el-select>
     </div>
@@ -68,12 +68,12 @@
           <el-input v-model="addForm.work_name" placeholder="请输入作品名称" />
         </el-form-item>
         <el-form-item label="权属证明" required>
-          <el-upload :auto-upload="false" :limit="1" :on-change="(f) => addForm._proofFile = f.raw" accept=".jpg,.jpeg,.png,.pdf">
+          <el-upload ref="proofUploadRef" :auto-upload="false" :limit="1" :on-change="(f) => addForm._proofFile = f.raw" accept=".jpg,.jpeg,.png,.pdf">
             <el-button size="small" type="primary">选择文件</el-button>
           </el-upload>
         </el-form-item>
         <el-form-item label="其他证明">
-          <el-upload :auto-upload="false" :limit="5" :on-change="handleOtherChange" multiple accept=".jpg,.jpeg,.png,.pdf">
+          <el-upload ref="otherUploadRef" :auto-upload="false" :limit="5" :on-change="handleOtherChange" multiple accept=".jpg,.jpeg,.png,.pdf">
             <el-button size="small">选择文件（可多个）</el-button>
           </el-upload>
         </el-form-item>
@@ -87,7 +87,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, onUnmounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { getWorks, createWork, deleteWork } from '../api/work'
 import { getCompanies } from '../api/company'
@@ -103,7 +103,16 @@ const filterCompanyId = ref(null)
 const filterAgentId = ref(null)
 const searchKeywords = ref('')
 
+let searchTimer = null
+function onSearchInput() {
+  clearTimeout(searchTimer)
+  searchTimer = setTimeout(() => loadData(), 400)
+}
+onUnmounted(() => clearTimeout(searchTimer))
+
 const addDialogVisible = ref(false)
+const proofUploadRef = ref(null)
+const otherUploadRef = ref(null)
 const addForm = reactive({
   company_id: null,
   agent_id: null,
@@ -188,6 +197,15 @@ async function handleAdd() {
     if (res.success) {
       ElMessage.success('添加成功')
       addDialogVisible.value = false
+      // 清空表单和上传文件
+      addForm.company_id = null
+      addForm.agent_id = null
+      addForm.work_name = ''
+      addForm._proofFile = null
+      addForm._otherFiles = []
+      addAgentOptions.value = []
+      proofUploadRef.value?.clearFiles()
+      otherUploadRef.value?.clearFiles()
       loadData()
     } else {
       ElMessage.error(res.error)
