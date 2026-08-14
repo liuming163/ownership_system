@@ -22,6 +22,11 @@
       </el-select>
     </div>
 
+    <!-- 搜索关键词未匹配提示 -->
+    <div v-if="unmatchedKeywords.length > 0" class="search-warning">
+      搜索内容中，{{ unmatchedKeywords.join('、') }} 没有匹配出数据
+    </div>
+
     <el-table :data="works" v-loading="loading" border stripe>
       <el-table-column prop="company_name" label="代理主体" width="160" />
       <el-table-column prop="agent_name" label="被代理人" width="160" />
@@ -102,6 +107,7 @@ const submitting = ref(false)
 const filterCompanyId = ref(null)
 const filterAgentId = ref(null)
 const searchKeywords = ref('')
+const unmatchedKeywords = ref([])
 
 let searchTimer = null
 function onSearchInput() {
@@ -135,7 +141,24 @@ async function loadData() {
     if (filterAgentId.value) params.agent_id = filterAgentId.value
     if (searchKeywords.value) params.search = searchKeywords.value
     const res = await getWorks(params)
-    if (res.success) works.value = res.data
+    if (res.success) {
+      works.value = res.data
+
+      // 检查未匹配的关键词
+      unmatchedKeywords.value = []
+      if (searchKeywords.value) {
+        const keywords = searchKeywords.value.split('_').map(k => k.trim()).filter(k => k)
+        const matchedSet = new Set()
+        works.value.forEach(w => {
+          keywords.forEach(kw => {
+            if (w.work_name.includes(kw)) {
+              matchedSet.add(kw)
+            }
+          })
+        })
+        unmatchedKeywords.value = keywords.filter(kw => !matchedSet.has(kw))
+      }
+    }
   } finally {
     loading.value = false
   }
@@ -241,4 +264,5 @@ function viewFile(folder, filename) {
 .page-container { padding: 20px; background: #fff; border-radius: 4px; }
 .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
 .filter-bar { margin-bottom: 16px; display: flex; align-items: center; }
+.search-warning { margin-bottom: 12px; color: #f56c6c; font-size: 14px; }
 </style>
