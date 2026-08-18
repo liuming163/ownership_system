@@ -2,7 +2,12 @@
   <div class="page-container">
     <div class="page-header">
       <h3>作品管理</h3>
-      <el-button type="primary" @click="showAddDialog">添加作品</el-button>
+      <div>
+        <el-button type="success" :disabled="selectedWorks.length === 0" @click="handlePackage">
+          打包下载{{ selectedWorks.length > 0 ? `(${selectedWorks.length})` : '' }}
+        </el-button>
+        <el-button type="primary" @click="showAddDialog" style="margin-left: 12px">添加作品</el-button>
+      </div>
     </div>
 
     <!-- 筛选 -->
@@ -27,7 +32,8 @@
       搜索内容中，{{ unmatchedKeywords.join('、') }} 没有匹配出数据
     </div>
 
-    <el-table :data="works" v-loading="loading" border stripe>
+    <el-table :data="works" v-loading="loading" border stripe @selection-change="handleSelectionChange">
+      <el-table-column type="selection" width="55" />
       <el-table-column prop="company_name" label="代理主体" width="160" />
       <el-table-column prop="agent_name" label="被代理人" width="160" />
       <el-table-column prop="work_name" label="作品名称" min-width="180" />
@@ -136,6 +142,7 @@ const filterCompanyId = ref(null)
 const filterAgentId = ref(null)
 const searchKeywords = ref('')
 const unmatchedKeywords = ref([])
+const selectedWorks = ref([])
 
 let searchTimer = null
 function onSearchInput() {
@@ -292,6 +299,44 @@ function viewFile(folder, filename) {
 function showOtherFiles(row) {
   currentOtherFiles.value = row.other_files || []
   otherFilesDialogVisible.value = true
+}
+
+function handleSelectionChange(selection) {
+  selectedWorks.value = selection
+}
+
+async function handlePackage() {
+  if (selectedWorks.value.length === 0) {
+    return ElMessage.warning('请选择要打包的作品')
+  }
+
+  const workIds = selectedWorks.value.map(w => w.id)
+  try {
+    const response = await fetch('/api/works/package', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ work_ids: workIds })
+    })
+
+    if (!response.ok) {
+      const error = await response.json()
+      return ElMessage.error(error.error || '打包失败')
+    }
+
+    const blob = await response.blob()
+    const url = window.URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    const filename = response.headers.get('Content-Disposition')?.match(/filename="(.+)"/)?.[1] || 'works.zip'
+    a.download = decodeURIComponent(filename)
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    window.URL.revokeObjectURL(url)
+    ElMessage.success('打包成功')
+  } catch (e) {
+    ElMessage.error('打包失败：' + e.message)
+  }
 }
 </script>
 

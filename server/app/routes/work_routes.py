@@ -1,11 +1,17 @@
 """Work (作品) routes."""
 
-from flask import Blueprint, request
+from flask import Blueprint, request, send_file
+from datetime import datetime
+from urllib.parse import quote
+import zipfile
+import os
+import tempfile
 
 from ..auth.decorators import login_required, get_current_user
 from ..services import work_service, file_service
 from ..utils.response import success, error
 from ..utils.validators import sanitize_filename_part
+from ..config import Config
 
 work_bp = Blueprint('works', __name__, url_prefix='/api/works')
 
@@ -106,3 +112,78 @@ def delete_work(work_id):
     if not ok:
         return error(err)
     return success(message='删除成功')
+
+
+@work_bp.route('/package', methods=['POST'])
+@login_required
+def package_works():
+    data = request.get_json()
+    work_ids = data.get('work_ids', [])
+
+    if not work_ids:
+        return error('请选择要打包的作品')
+
+    # 查询所有作品
+    works = []
+    for work_id in work_ids:
+        work = work_service.get_work(work_id)
+        if work:
+            works.append(work)
+
+    if not works:
+        return error('未找到有效的作品')
+
+    # 创建临时zip文件
+    temp_zip = tempfile.NamedTemporaryFile(delete=False, suffix='.zip')
+    temp_zip.close()
+
+    try:
+        with zipfile.ZipFile(temp_zip.name, 'w', zipfile.ZIP_DEFLATED) as zipf:
+            for work in works:
+                work_name = sanitize_filename_part(work['work_name'])
+                work_folder = f"{work_name}/"
+
+                # 添加权属证明
+                if work.get('proof_file'):
+                    proof_path = os.path.join(Config.UPLOAD_FOLDER, '权属证明', work['proof_file'])
+                    if os.path.exists(proof_path):
+                        zipf.write(proof_path, f"{work_folder}权属证明_{work['proof_file']}")
+
+                # 添加其他证明
+                other_files = work.get('other_files', []) or []
+                for idx, filename in enumerate(other_files, 1):
+                    other_path = os.path.join(Config.UPLOAD_FOLDER, '权属证明', filename)
+                    if os.path.exists(other_path):
+                        zipf.write(other_path, f"{work_folder}其他证明{idx}_{filename}")
+
+        # 生成文件名
+        today = datetime.now().strftime('%Y%m%d')
+        zip_filename = f"作品打包_共{len(works)}部_{today}.zip"
+
+        response = send_file(
+            temp_zip.name,
+            as_attachment=True,
+            mimetype='application/zip'
+        )
+
+        # 手动设置 Content-Disposition 响应头，支持中文文件名
+        encoded_filename = quote(zip_filename)
+        response.headers['Content-Disposition'] = f'attachment; filename="{encoded_filename}"'
+
+        # 响应发送后删除临时文件
+        @response.call_on_close
+        def cleanup():
+            try:
+                os.unlink(temp_zip.name)
+            except:
+                pass
+
+        return response
+    except Exception as e:
+        # 出错时立即删除临时文件
+        try:
+            os.unlink(temp_zip.name)
+        except:
+            pass
+        return error(f'打包失败: {str(e)}')
+
