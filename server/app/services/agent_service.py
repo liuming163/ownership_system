@@ -31,6 +31,58 @@ def list_agents(company_id=None):
     return [_row_to_dict(r) for r in rows]
 
 
+def get_expiring_auth():
+    """获取授权过期和即将过期的被代理人列表"""
+    from datetime import date, timedelta
+
+    today = date.today()
+    threshold = today + timedelta(days=30)
+
+    with get_db_session() as session:
+        # 获取所有被代理人的授权信息
+        rows = session.execute(text("""
+            SELECT a.id, a.agent_name, c.company_name, a.auth_expires_on
+            FROM agents a
+            JOIN companies c ON c.id = a.company_id
+            WHERE a.auth_expires_on IS NOT NULL
+            ORDER BY a.auth_expires_on ASC
+        """)).mappings().all()
+
+    expired = []
+    expiring_soon = []
+
+    for r in rows:
+        expire_date = r['auth_expires_on']
+        if expire_date < today:
+            # 已过期
+            days = (today - expire_date).days
+            expired.append({
+                'agent_id': r['id'],
+                'agent_name': r['agent_name'],
+                'company_name': r['company_name'],
+                'days': days,
+                'auth_expires_on': expire_date.isoformat()
+            })
+        elif expire_date <= threshold:
+            # 30天内到期
+            days = (expire_date - today).days
+            expiring_soon.append({
+                'agent_id': r['id'],
+                'agent_name': r['agent_name'],
+                'company_name': r['company_name'],
+                'days': days,
+                'auth_expires_on': expire_date.isoformat()
+            })
+
+    # 已过期：按过期天数倒序（最严重的在前）
+    expired.sort(key=lambda x: x['days'], reverse=True)
+
+    # 即将过期：按剩余天数正序（最紧急的在前）
+    expiring_soon.sort(key=lambda x: x['days'])
+
+    return expired, expiring_soon
+
+
 def get_agent(agent_id):
     with get_db_session() as session:
         row = session.execute(text("""
@@ -215,6 +267,24 @@ def delete_agent(agent_id):
                     pass
 
     return True, None
+
+
+def get_agent_auth_history(agent_id):
+    """获取被代理人的授权委托书历史记录。"""
+    with get_db_session() as session:
+        rows = session.execute(text("""
+            SELECT auth_file, auth_expires_on, uploaded_by, uploaded_at
+            FROM agent_auth_history
+            WHERE agent_id = :agent_id
+            ORDER BY uploaded_at DESC
+        """), {'agent_id': agent_id}).mappings().all()
+
+    return [{
+        'auth_file': row['auth_file'],
+        'auth_expires_on': row['auth_expires_on'].isoformat() if row['auth_expires_on'] else None,
+        'uploaded_by': row['uploaded_by'],
+        'uploaded_at': row['uploaded_at'].isoformat() if row['uploaded_at'] else None,
+    } for row in rows]
 
 
 def _row_to_dict(row):

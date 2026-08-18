@@ -1,26 +1,39 @@
 """Agent (被代理人) routes."""
 
 from flask import Blueprint, request
+from datetime import datetime
 
 from ..auth.decorators import login_required, get_current_user
-from ..services import agent_service, file_service
 from ..utils.response import success, error
+from ..services import agent_service, file_service, company_service
 from ..utils.validators import normalize_company_name, sanitize_filename_part
 
-agent_bp = Blueprint('agents', __name__, url_prefix='/api/agents')
+agent_bp = Blueprint('agent', __name__, url_prefix='/api/agents')
 
 
 @agent_bp.route('', methods=['GET'])
 @login_required
 def list_agents():
+    """获取被代理人列表（可按 company_id 过滤）"""
     company_id = request.args.get('company_id', type=int)
-    data = agent_service.list_agents(company_id)
-    return success(data)
+    return success(agent_service.list_agents(company_id))
+
+
+@agent_bp.route('/expiring-auth', methods=['GET'])
+@login_required
+def get_expiring_auth():
+    """获取授权过期和即将过期的被代理人列表"""
+    expired, expiring_soon = agent_service.get_expiring_auth()
+    return success({
+        'expired': expired,
+        'expiring_soon': expiring_soon
+    })
 
 
 @agent_bp.route('/<int:agent_id>', methods=['GET'])
 @login_required
 def get_agent(agent_id):
+    """获取被代理人详情"""
     data = agent_service.get_agent(agent_id)
     if not data:
         return error('被代理人不存在', 404)
@@ -30,13 +43,14 @@ def get_agent(agent_id):
 @agent_bp.route('', methods=['POST'])
 @login_required
 def create_agent():
+    """创建被代理人，上传营业执照和授权委托书。"""
     company_id = request.form.get('company_id', type=int)
     agent_name = request.form.get('agent_name', '').strip()
-    period_end = request.form.get('period_end', '').strip() or None
-    is_long_term = request.form.get('is_long_term', '0') == '1'
-    auth_expires_on = request.form.get('auth_expires_on', '').strip()
     license_file = request.files.get('license_file')
+    period_end = request.form.get('period_end', '').strip()
+    is_long_term = request.form.get('is_long_term') == 'true'
     auth_file = request.files.get('auth_file')
+    auth_expires_on = request.form.get('auth_expires_on', '').strip()
 
     if not company_id:
         return error('请选择代理主体')
@@ -112,16 +126,18 @@ def update_auth(agent_id):
 
 @agent_bp.route('/<int:agent_id>/auth/history', methods=['GET'])
 @login_required
-def auth_history(agent_id):
-    """获取授权委托书变更历史。"""
-    data = agent_service.get_auth_history(agent_id)
-    return success(data)
+def get_auth_history(agent_id):
+    """获取被代理人的授权委托书历史记录。"""
+    history = agent_service.get_agent_auth_history(agent_id)
+    return success(history)
 
 
 @agent_bp.route('/<int:agent_id>', methods=['DELETE'])
 @login_required
 def delete_agent(agent_id):
-    ok, err = agent_service.delete_agent(agent_id)
-    if not ok:
+    """删除被代理人，同时删除数据库记录和本地文件。"""
+    err = agent_service.delete_agent(agent_id)
+    if err:
         return error(err)
     return success(message='删除成功')
+

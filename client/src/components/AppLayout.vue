@@ -38,10 +38,12 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { OfficeBuilding, User, Document } from '@element-plus/icons-vue'
+import { ElMessageBox } from 'element-plus'
 import { useUserStore } from '../stores/user'
+import { checkExpiringAuth } from '../api/agent'
 
 const route = useRoute()
 const router = useRouter()
@@ -53,6 +55,63 @@ async function handleLogout() {
   await userStore.logout()
   router.push('/login')
 }
+
+// 登录后检查授权委托书到期提醒
+onMounted(() => {
+  setTimeout(async () => {
+    // 检查本次会话是否已提醒过
+    const notified = sessionStorage.getItem('auth_expiry_notified')
+    if (notified) return
+
+    try {
+      const { data } = await checkExpiringAuth()
+      const { expired, expiring_soon } = data
+
+      if (expired.length === 0 && expiring_soon.length === 0) {
+        // 没有需要提醒的，标记为已提醒
+        sessionStorage.setItem('auth_expiry_notified', 'true')
+        return
+      }
+
+      // 构建提醒内容
+      let message = ''
+
+      if (expired.length > 0) {
+        message += '<div style="margin-bottom: 12px;"><strong>【已过期】</strong></div>'
+        expired.forEach(item => {
+          message += `<div style="margin-bottom: 8px;">• ${item.agent_name}（代理主体：${item.company_name}）已过期 <span style="color: #F56C6C; font-weight: bold;">${item.days}</span> 天</div>`
+        })
+      }
+
+      if (expiring_soon.length > 0) {
+        if (message) message += '<div style="margin-top: 16px;"></div>'
+        message += '<div style="margin-bottom: 12px;"><strong>【即将过期】</strong></div>'
+        expiring_soon.forEach(item => {
+          message += `<div style="margin-bottom: 8px;">• ${item.agent_name}（代理主体：${item.company_name}）将于 <span style="color: #E6A23C; font-weight: bold;">${item.days}</span> 天后到期</div>`
+        })
+      }
+
+      // 显示弹窗
+      await ElMessageBox.confirm(message, '授权委托书到期提醒', {
+        confirmButtonText: '前往被代理人管理页面',
+        cancelButtonText: '我知道了',
+        dangerouslyUseHTMLString: true,
+        type: 'warning',
+        distinguishCancelAndClose: true,
+      }).then(() => {
+        // 点击确认按钮，跳转到被代理人管理页面
+        router.push('/agents')
+      }).catch(() => {
+        // 点击取消或关闭，不做处理
+      })
+
+      // 标记为已提醒
+      sessionStorage.setItem('auth_expiry_notified', 'true')
+    } catch (error) {
+      console.error('检查授权到期失败:', error)
+    }
+  }, 1000)
+})
 </script>
 
 <style scoped>

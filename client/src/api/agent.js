@@ -24,3 +24,7 @@ export function getAuthHistory(id) {
 export function deleteAgent(id) {
   return request.delete(`/agents/${id}`)
 }
+
+export function checkExpiringAuth() {
+  return request.get('/agents/expiring-auth')
+}
