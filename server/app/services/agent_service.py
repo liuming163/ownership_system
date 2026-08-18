@@ -144,6 +144,10 @@ def get_auth_history(agent_id):
 
 
 def delete_agent(agent_id):
+    from . import file_service
+    import os
+    from flask import current_app
+
     with get_db_session() as session:
         has_works = session.execute(text(
             "SELECT 1 FROM works WHERE agent_id = :id LIMIT 1"
@@ -151,16 +155,64 @@ def delete_agent(agent_id):
         if has_works:
             return False, '该被代理人下存在作品，无法删除'
 
-        # 先删历史
+        # 获取被代理人信息（用于删除文件）
+        agent = session.execute(text("""
+            SELECT agent_name, license_file, auth_file
+            FROM agents WHERE id = :id
+        """), {'id': agent_id}).mappings().first()
+
+        if not agent:
+            return False, '被代理人不存在'
+
+        # 获取所有历史授权文件
+        auth_history = session.execute(text("""
+            SELECT auth_file FROM agent_auth_history WHERE agent_id = :id
+        """), {'id': agent_id}).mappings().all()
+
+        # 先删历史记录
         session.execute(text(
             "DELETE FROM agent_auth_history WHERE agent_id = :id"
         ), {'id': agent_id})
+
+        # 删除数据库记录
         result = session.execute(text(
             "DELETE FROM agents WHERE id = :id"
         ), {'id': agent_id})
         session.commit()
+
         if result.rowcount == 0:
             return False, '被代理人不存在'
+
+    # 删除本地文件
+    upload_base = current_app.config['UPLOAD_FOLDER']
+
+    # 1. 删除被代理人营业执照
+    if agent['license_file']:
+        license_path = os.path.join(upload_base, '被代理人营业执照', agent['license_file'])
+        if os.path.exists(license_path):
+            try:
+                os.remove(license_path)
+            except OSError:
+                pass  # 文件删除失败不影响数据库删除结果
+
+    # 2. 删除当前授权委托书
+    if agent['auth_file']:
+        auth_path = os.path.join(upload_base, '授权委托书', agent['auth_file'])
+        if os.path.exists(auth_path):
+            try:
+                os.remove(auth_path)
+            except OSError:
+                pass
+
+    # 3. 删除历史授权委托书
+    for record in auth_history:
+        if record['auth_file']:
+            auth_path = os.path.join(upload_base, '授权委托书', record['auth_file'])
+            if os.path.exists(auth_path):
+                try:
+                    os.remove(auth_path)
+                except OSError:
+                    pass
 
     return True, None
 

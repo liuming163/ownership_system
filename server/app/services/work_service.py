@@ -111,13 +111,56 @@ def update_work(work_id, proof_file=None, other_files=None):
 
 
 def delete_work(work_id):
+    from . import file_service
+    import os
+    from flask import current_app
+
     with get_db_session() as session:
+        # 获取作品信息（用于删除文件）
+        work = session.execute(text("""
+            SELECT work_name, proof_file, other_files
+            FROM works WHERE id = :id
+        """), {'id': work_id}).mappings().first()
+
+        if not work:
+            return False, '作品不存在'
+
+        # 删除数据库记录
         result = session.execute(text(
             "DELETE FROM works WHERE id = :id"
         ), {'id': work_id})
         session.commit()
+
         if result.rowcount == 0:
             return False, '作品不存在'
+
+    # 删除本地文件
+    upload_base = current_app.config['UPLOAD_FOLDER']
+    proof_dir = os.path.join(upload_base, '权属证明')
+
+    # 1. 删除权属证明文件
+    if work['proof_file']:
+        proof_path = os.path.join(proof_dir, work['proof_file'])
+        if os.path.exists(proof_path):
+            try:
+                os.remove(proof_path)
+            except OSError:
+                pass
+
+    # 2. 删除其他证明文件
+    if work['other_files']:
+        try:
+            other_files = json.loads(work['other_files']) if isinstance(work['other_files'], str) else work['other_files']
+            for filename in other_files:
+                other_path = os.path.join(proof_dir, filename)
+                if os.path.exists(other_path):
+                    try:
+                        os.remove(other_path)
+                    except OSError:
+                        pass
+        except (json.JSONDecodeError, TypeError):
+            pass
+
     return True, None
 
 

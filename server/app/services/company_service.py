@@ -88,6 +88,10 @@ def update_company(company_id, license_file=None, period_end=None, is_long_term=
 
 
 def delete_company(company_id):
+    from . import file_service
+    import os
+    from flask import current_app
+
     with get_db_session() as session:
         has_agents = session.execute(text(
             "SELECT 1 FROM agents WHERE company_id = :id LIMIT 1"
@@ -95,12 +99,33 @@ def delete_company(company_id):
         if has_agents:
             return False, '该代理主体下存在被代理人，无法删除'
 
+        # 获取代理主体信息（用于删除文件）
+        company = session.execute(text("""
+            SELECT company_name, license_file
+            FROM companies WHERE id = :id
+        """), {'id': company_id}).mappings().first()
+
+        if not company:
+            return False, '代理主体不存在'
+
+        # 删除数据库记录
         result = session.execute(text(
             "DELETE FROM companies WHERE id = :id"
         ), {'id': company_id})
         session.commit()
+
         if result.rowcount == 0:
             return False, '代理主体不存在'
+
+    # 删除本地营业执照文件
+    if company['license_file']:
+        upload_base = current_app.config['UPLOAD_FOLDER']
+        license_path = os.path.join(upload_base, '营业执照', company['license_file'])
+        if os.path.exists(license_path):
+            try:
+                os.remove(license_path)
+            except OSError:
+                pass  # 文件删除失败不影响数据库删除结果
 
     return True, None
 
