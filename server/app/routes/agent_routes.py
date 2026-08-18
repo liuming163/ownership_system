@@ -51,11 +51,18 @@ def create_agent():
     if not is_long_term and not period_end:
         return error('请填写营业期限截止日期或选择长期')
 
+    # 获取代理主体名称
+    from app.services import company_service
+    company = company_service.get_company(company_id)
+    if not company:
+        return error('代理主体不存在')
+
     safe_name = sanitize_filename_part(normalize_company_name(agent_name))
+    safe_company_name = sanitize_filename_part(normalize_company_name(company['company_name']))
 
     # 保存文件
     license_filename = file_service.save_agent_license(license_file, safe_name)
-    auth_filename = file_service.save_auth_file(auth_file, safe_name, auth_expires_on)
+    auth_filename = file_service.save_auth_file(auth_file, safe_name, safe_company_name, auth_expires_on)
 
     data, err = agent_service.create_agent(
         company_id=company_id,
@@ -89,7 +96,8 @@ def update_auth(agent_id):
         return error('被代理人不存在', 404)
 
     safe_name = sanitize_filename_part(normalize_company_name(existing['agent_name']))
-    auth_filename = file_service.save_auth_file(auth_file, safe_name, auth_expires_on)
+    safe_company_name = sanitize_filename_part(normalize_company_name(existing['company_name']))
+    auth_filename = file_service.save_auth_file(auth_file, safe_name, safe_company_name, auth_expires_on)
 
     data, err = agent_service.update_agent_auth(
         agent_id=agent_id,

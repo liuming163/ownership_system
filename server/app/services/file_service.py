@@ -48,15 +48,15 @@ def save_agent_license(file_storage, agent_name):
     return filename
 
 
-def save_auth_file(file_storage, agent_name, expires_date):
-    """保存授权委托书。命名：授权委托书_{被代理人名}_截止{YYYYMMDD}.{ext}
+def save_auth_file(file_storage, agent_name, company_name, expires_date):
+    """保存授权委托书。命名：授权委托书_{被代理人名}_{代理主体名}_截止{YYYYMMDD}.{ext}
     不覆盖旧文件，新日期自然不同名。"""
     target_dir = get_upload_dir('授权委托书')
     ext = Path(file_storage.filename).suffix.lower()
     data = _read_bytes(file_storage)
     data, ext = _compress_if_needed(data, ext)
     date_str = expires_date.replace('-', '')
-    filename = f'授权委托书_{agent_name}_截止{date_str}{ext}'
+    filename = f'授权委托书_{agent_name}_{company_name}_截止{date_str}{ext}'
     # 如果同名已存在（同一天更新多次），加uuid后缀
     full_path = os.path.join(target_dir, filename)
     if os.path.exists(full_path):
