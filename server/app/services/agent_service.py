@@ -273,17 +273,17 @@ def get_agent_auth_history(agent_id):
     """获取被代理人的授权委托书历史记录。"""
     with get_db_session() as session:
         rows = session.execute(text("""
-            SELECT auth_file, auth_expires_on, uploaded_by, uploaded_at
+            SELECT auth_file, auth_expires_on, uploaded_by, replaced_at
             FROM agent_auth_history
             WHERE agent_id = :agent_id
-            ORDER BY uploaded_at DESC
+            ORDER BY replaced_at DESC
         """), {'agent_id': agent_id}).mappings().all()
 
     return [{
         'auth_file': row['auth_file'],
         'auth_expires_on': row['auth_expires_on'].isoformat() if row['auth_expires_on'] else None,
         'uploaded_by': row['uploaded_by'],
-        'uploaded_at': row['uploaded_at'].isoformat() if row['uploaded_at'] else None,
+        'replaced_at': row['replaced_at'].isoformat() if row['replaced_at'] else None,
     } for row in rows]
 
 
