@@ -140,21 +140,18 @@ def package_works():
     try:
         with zipfile.ZipFile(temp_zip.name, 'w', zipfile.ZIP_DEFLATED) as zipf:
             for work in works:
-                work_name = sanitize_filename_part(work['work_name'])
-                work_folder = f"{work_name}/"
-
                 # 添加权属证明
                 if work.get('proof_file'):
                     proof_path = os.path.join(Config.UPLOAD_FOLDER, '权属证明', work['proof_file'])
                     if os.path.exists(proof_path):
-                        zipf.write(proof_path, f"{work_folder}权属证明_{work['proof_file']}")
+                        zipf.write(proof_path, work['proof_file'])
 
                 # 添加其他证明
                 other_files = work.get('other_files', []) or []
-                for idx, filename in enumerate(other_files, 1):
+                for filename in other_files:
                     other_path = os.path.join(Config.UPLOAD_FOLDER, '权属证明', filename)
                     if os.path.exists(other_path):
-                        zipf.write(other_path, f"{work_folder}其他证明{idx}_{filename}")
+                        zipf.write(other_path, filename)
 
         # 生成文件名
         today = datetime.now().strftime('%Y%m%d')
