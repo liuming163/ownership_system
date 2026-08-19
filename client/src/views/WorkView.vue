@@ -93,8 +93,8 @@
           </el-upload>
         </el-form-item>
         <el-form-item label="其他证明">
-          <el-upload ref="otherUploadRef" :auto-upload="false" :limit="5" :on-change="handleOtherChange" multiple accept=".jpg,.jpeg,.png,.pdf">
-            <el-button size="small">选择文件（可多个）</el-button>
+          <el-upload ref="otherUploadRef" :auto-upload="false" :limit="2" :on-change="handleOtherChange" multiple accept=".jpg,.jpeg,.png,.pdf">
+            <el-button size="small">选择文件（最多2个）</el-button>
           </el-upload>
         </el-form-item>
       </el-form>
