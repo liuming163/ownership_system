@@ -19,6 +19,7 @@
         @input="onSearchInput"
         style="margin-right: 12px; flex: 1"
       />
+      <el-button type="success" @click="showExcelUploadDialog" style="margin-right: 12px">从Excel获取作品名称</el-button>
       <el-select v-model="filterCompanyId" placeholder="代理主体" clearable @change="onCompanyChange" style="width: 320px; margin-right: 12px">
         <el-option v-for="c in companyOptions" :key="c.id" :label="c.company_name" :value="c.id" />
       </el-select>
@@ -30,6 +31,11 @@
     <!-- 搜索关键词未匹配提示 -->
     <div v-if="unmatchedKeywords.length > 0" class="search-warning">
       搜索内容中，{{ unmatchedKeywords.join('、') }} 没有匹配出数据
+    </div>
+
+    <!-- Excel未匹配作品提示 -->
+    <div v-if="unmatchedExcelWorks.length > 0" class="search-warning">
+      Excel中以下作品名称未匹配到数据：{{ unmatchedExcelWorks.join('、') }}
     </div>
 
     <el-table :data="works" v-loading="loading" border stripe @selection-change="handleSelectionChange">
@@ -138,6 +144,30 @@
         <el-button type="primary" :loading="packaging" @click="confirmPackage">确定</el-button>
       </template>
     </el-dialog>
+
+    <!-- Excel上传弹窗 -->
+    <el-dialog v-model="excelUploadDialogVisible" title="从Excel获取作品名称" width="650px">
+      <el-form label-width="140px">
+        <el-form-item label="上传Excel文件" required>
+          <el-upload
+            ref="excelUploadRef"
+            :auto-upload="false"
+            :limit="1"
+            :on-change="handleExcelChange"
+            accept=".xls,.xlsx"
+          >
+            <el-button size="small" type="primary">选择文件</el-button>
+          </el-upload>
+        </el-form-item>
+        <el-form-item label="作品名称所在列" required>
+          <el-input v-model="excelColumnName" placeholder="如：A、B、C（不区分大小写）" style="width: 300px" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="excelUploadDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="excelProcessing" @click="handleExcelSubmit">提交</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -148,6 +178,7 @@ import { Document } from '@element-plus/icons-vue'
 import { getWorks, createWork, deleteWork } from '../api/work'
 import { getCompanies } from '../api/company'
 import { getAgents } from '../api/agent'
+import * as XLSX from 'xlsx'
 
 const works = ref([])
 const companyOptions = ref([])
@@ -159,10 +190,28 @@ const filterCompanyId = ref(null)
 const filterAgentId = ref(null)
 const searchKeywords = ref('')
 const unmatchedKeywords = ref([])
+const unmatchedExcelWorks = ref([])
 const selectedWorks = ref([])
+
+// Excel上传相关
+const excelUploadDialogVisible = ref(false)
+const excelUploadRef = ref(null)
+const excelColumnName = ref('')
+const excelProcessing = ref(false)
+const excelFile = ref(null)
+const excelWorkNames = ref([]) // 从Excel提取的作品名称列表
+const excelRawData = ref([]) // Excel原始数据（包含表头）
+const isExcelMode = ref(false) // 标记当前是否为Excel搜索模式
 
 let searchTimer = null
 function onSearchInput() {
+  if (isExcelMode.value) {
+    ElMessage.info('已切换到搜索栏模式')
+    isExcelMode.value = false
+    excelWorkNames.value = []
+    excelRawData.value = []
+    unmatchedExcelWorks.value = []
+  }
   clearTimeout(searchTimer)
   searchTimer = setTimeout(() => loadData(), 400)
 }
@@ -197,15 +246,24 @@ async function loadData() {
     const params = {}
     if (filterCompanyId.value) params.company_id = filterCompanyId.value
     if (filterAgentId.value) params.agent_id = filterAgentId.value
-    if (searchKeywords.value) params.search = searchKeywords.value
+
+    // Excel模式：用Excel中的作品名称搜索
+    if (isExcelMode.value && excelWorkNames.value.length > 0) {
+      params.search = excelWorkNames.value.join('_')
+    } else if (searchKeywords.value) {
+      params.search = searchKeywords.value
+    }
+
     const res = await getWorks(params)
     if (res.success) {
       let resultWorks = res.data
 
-      // 检查未匹配的关键词，并按关键词热度排序
+      // 检查未匹配的关键词/作品名称，并按关键词热度排序
       unmatchedKeywords.value = []
-      if (searchKeywords.value) {
-        const keywords = searchKeywords.value.split('_').map(k => k.trim()).filter(k => k)
+      unmatchedExcelWorks.value = []
+
+      if (params.search) {
+        const keywords = params.search.split('_').map(k => k.trim()).filter(k => k)
         const matchedSet = new Set()
 
         // 统计每个关键词匹配了多少部作品
@@ -259,7 +317,21 @@ async function loadData() {
         // 按权重从高到低排序
         resultWorks.sort((a, b) => b._weight - a._weight)
 
-        unmatchedKeywords.value = keywords.filter(kw => !matchedSet.has(kw))
+        // Excel模式：检查未匹配的作品名称（完全匹配）
+        if (isExcelMode.value) {
+          resultWorks.forEach(w => {
+            const aliases = w.alias ? w.alias.split('_').map(a => a.trim()).filter(a => a) : []
+            excelWorkNames.value.forEach(excelName => {
+              if (w.work_name === excelName || aliases.includes(excelName)) {
+                matchedSet.add(excelName)
+              }
+            })
+          })
+          unmatchedExcelWorks.value = excelWorkNames.value.filter(name => !matchedSet.has(name))
+        } else {
+          // 搜索栏模式：检查未匹配的关键词
+          unmatchedKeywords.value = keywords.filter(kw => !matchedSet.has(kw))
+        }
       }
 
       works.value = resultWorks
@@ -378,6 +450,87 @@ function handleSelectionChange(selection) {
   selectedWorks.value = selection
 }
 
+// Excel上传相关函数
+function showExcelUploadDialog() {
+  excelUploadDialogVisible.value = true
+  excelColumnName.value = ''
+  excelFile.value = null
+  if (excelUploadRef.value) {
+    excelUploadRef.value.clearFiles()
+  }
+}
+
+function handleExcelChange(file) {
+  excelFile.value = file.raw
+}
+
+async function handleExcelSubmit() {
+  if (!excelFile.value) {
+    return ElMessage.warning('请选择Excel文件')
+  }
+  if (!excelColumnName.value || !/^[a-zA-Z]$/.test(excelColumnName.value.trim())) {
+    return ElMessage.warning('请输入有效的列名（如：A、B、C）')
+  }
+
+  excelProcessing.value = true
+  try {
+    const reader = new FileReader()
+    reader.onload = async (e) => {
+      try {
+        const data = new Uint8Array(e.target.result)
+        const workbook = XLSX.read(data, { type: 'array' })
+        const sheetName = workbook.SheetNames[0]
+        const worksheet = workbook.Sheets[sheetName]
+
+        // 读取所有数据（包含表头）
+        const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' })
+        excelRawData.value = jsonData
+
+        // 将列名转换为列索引（A=0, B=1, C=2...）
+        const columnIndex = excelColumnName.value.toUpperCase().charCodeAt(0) - 65
+
+        // 提取作品名称（从第二行开始，跳过表头）
+        const workNames = []
+        for (let i = 1; i < jsonData.length; i++) {
+          const row = jsonData[i]
+          if (row[columnIndex]) {
+            const workName = String(row[columnIndex]).trim()
+            if (workName) {
+              workNames.push(workName)
+            }
+          }
+        }
+
+        if (workNames.length === 0) {
+          ElMessage.warning('未从Excel中提取到作品名称')
+          excelProcessing.value = false
+          return
+        }
+
+        // 去重
+        excelWorkNames.value = [...new Set(workNames)]
+
+        // 切换到Excel模式
+        isExcelMode.value = true
+        searchKeywords.value = '' // 清空搜索栏
+        excelUploadDialogVisible.value = false
+
+        // 加载数据
+        await loadData()
+        ElMessage.success(`已提取${excelWorkNames.value.length}个作品名称`)
+        excelProcessing.value = false
+      } catch (err) {
+        ElMessage.error('解析Excel失败：' + err.message)
+        excelProcessing.value = false
+      }
+    }
+    reader.readAsArrayBuffer(excelFile.value)
+  } catch (e) {
+    ElMessage.error('读取文件失败：' + e.message)
+    excelProcessing.value = false
+  }
+}
+
 async function handlePackage() {
   if (selectedWorks.value.length === 0) {
     return ElMessage.warning('请选择要打包的作品')
@@ -389,13 +542,22 @@ async function confirmPackage() {
   const workIds = selectedWorks.value.map(w => w.id)
   packaging.value = true
   try {
+    const requestBody = {
+      work_ids: workIds,
+      max_size_mb: maxPackageSize.value
+    }
+
+    // Excel模式：传递Excel原始数据和列索引
+    if (isExcelMode.value && excelRawData.value.length > 0) {
+      requestBody.excel_mode = true
+      requestBody.excel_data = excelRawData.value
+      requestBody.selected_work_names = selectedWorks.value.map(w => w.work_name)
+    }
+
     const response = await fetch('/api/works/package', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        work_ids: workIds,
-        max_size_mb: maxPackageSize.value
-      })
+      body: JSON.stringify(requestBody)
     })
 
     if (!response.ok) {

@@ -122,6 +122,9 @@ def package_works():
     data = request.get_json()
     work_ids = data.get('work_ids', [])
     max_size_mb = data.get('max_size_mb', 18)
+    excel_mode = data.get('excel_mode', False)
+    excel_data = data.get('excel_data', [])
+    selected_work_names = data.get('selected_work_names', [])
 
     if not work_ids:
         return error('请选择要打包的作品')
@@ -193,16 +196,84 @@ def package_works():
 
     today = datetime.now().strftime('%Y%m%d')
 
+    # 生成Excel清单函数
+    def create_excel_manifest(package_works, package_idx=None):
+        """生成Excel清单
+        package_works: 当前包中的作品列表
+        package_idx: 如果是分包，传入包序号；如果是单包，传None
+        """
+        import openpyxl
+        from openpyxl import Workbook
+
+        if excel_mode and excel_data:
+            # Excel模式：提取当前包的作品对应的原始Excel行
+            wb = Workbook()
+            ws = wb.active
+            ws.title = "作品清单"
+
+            # 写入表头（Excel第一行）
+            if len(excel_data) > 0:
+                header = excel_data[0]
+                for col_idx, cell_value in enumerate(header, start=1):
+                    ws.cell(row=1, column=col_idx, value=cell_value)
+
+            # 提取当前包的作品名称集合
+            package_work_names = set(wf['work_name'] for wf in package_works)
+
+            # 遍历Excel数据行（从第2行开始），筛选匹配的行
+            row_num = 2
+            for data_row in excel_data[1:]:
+                # 检查这一行是否对应当前包中的某个作品
+                for cell_value in data_row:
+                    if str(cell_value).strip() in package_work_names:
+                        # 写入这一行的所有列
+                        for col_idx, cell_val in enumerate(data_row, start=1):
+                            ws.cell(row=row_num, column=col_idx, value=cell_val)
+                        row_num += 1
+                        break  # 该行已处理，跳到下一行
+
+            # 保存Excel
+            temp_excel = tempfile.NamedTemporaryFile(delete=False, suffix='.xlsx', mode='wb')
+            temp_excel.close()
+            wb.save(temp_excel.name)
+            return temp_excel.name
+        else:
+            # 搜索栏模式：生成简单的作品名称列表
+            wb = Workbook()
+            ws = wb.active
+            ws.title = "作品清单"
+
+            # 表头
+            ws.cell(row=1, column=1, value="作品名称")
+
+            # 数据行
+            for idx, wf in enumerate(package_works, start=2):
+                ws.cell(row=idx, column=1, value=wf['work_name'])
+
+            # 保存Excel
+            temp_excel = tempfile.NamedTemporaryFile(delete=False, suffix='.xlsx', mode='wb')
+            temp_excel.close()
+            wb.save(temp_excel.name)
+            return temp_excel.name
+
     # 如果只有一个包，直接返回
     if len(packages) == 1:
         temp_zip = tempfile.NamedTemporaryFile(delete=False, suffix='.zip')
         temp_zip.close()
+        temp_excel_path = None
 
         try:
+            # 生成Excel清单
+            temp_excel_path = create_excel_manifest(packages[0])
+
             with zipfile.ZipFile(temp_zip.name, 'w', zipfile.ZIP_DEFLATED) as zipf:
+                # 添加作品文件
                 for wf in packages[0]:
                     for file_info in wf['files']:
                         zipf.write(file_info['path'], file_info['arcname'])
+
+                # 添加Excel清单
+                zipf.write(temp_excel_path, '作品清单.xlsx')
 
             zip_filename = f"作品打包_共{len(works)}部_{today}.zip"
 
@@ -219,6 +290,8 @@ def package_works():
             def cleanup():
                 try:
                     os.unlink(temp_zip.name)
+                    if temp_excel_path:
+                        os.unlink(temp_excel_path)
                 except:
                     pass
 
@@ -226,6 +299,8 @@ def package_works():
         except Exception as e:
             try:
                 os.unlink(temp_zip.name)
+                if temp_excel_path:
+                    os.unlink(temp_excel_path)
             except:
                 pass
             return error(f'打包失败: {str(e)}')
@@ -238,11 +313,25 @@ def package_works():
     try:
         sub_zips = []
         for idx, package in enumerate(packages, start=1):
+            # 生成当前包的Excel清单
+            temp_excel_path = create_excel_manifest(package, idx)
+
             sub_zip_path = os.path.join(temp_dir, f"作品打包_第{idx}包_共{len(works)}部_{today}.zip")
             with zipfile.ZipFile(sub_zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+                # 添加作品文件
                 for wf in package:
                     for file_info in wf['files']:
                         zipf.write(file_info['path'], file_info['arcname'])
+
+                # 添加Excel清单
+                zipf.write(temp_excel_path, '作品清单.xlsx')
+
+            # 清理临时Excel
+            try:
+                os.unlink(temp_excel_path)
+            except:
+                pass
+
             sub_zips.append(sub_zip_path)
 
         # 把所有子zip打包到总zip
