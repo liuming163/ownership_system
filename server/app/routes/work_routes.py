@@ -121,6 +121,7 @@ def delete_work(work_id):
 def package_works():
     data = request.get_json()
     work_ids = data.get('work_ids', [])
+    max_size_mb = data.get('max_size_mb', 18)
 
     if not work_ids:
         return error('请选择要打包的作品')
@@ -135,53 +136,146 @@ def package_works():
     if not works:
         return error('未找到有效的作品')
 
-    # 创建临时zip文件
-    temp_zip = tempfile.NamedTemporaryFile(delete=False, suffix='.zip')
-    temp_zip.close()
+    max_size_bytes = max_size_mb * 1024 * 1024  # 转换为字节
+
+    # 收集所有作品的文件及其大小
+    work_files = []
+    for work in works:
+        files = []
+        total_size = 0
+
+        # 权属证明
+        if work.get('proof_file'):
+            proof_path = os.path.join(Config.UPLOAD_FOLDER, '权属证明', work['proof_file'])
+            if os.path.exists(proof_path):
+                size = os.path.getsize(proof_path)
+                files.append({'path': proof_path, 'arcname': work['proof_file'], 'size': size})
+                total_size += size
+
+        # 其他证明
+        other_files = work.get('other_files', []) or []
+        for filename in other_files:
+            other_path = os.path.join(Config.UPLOAD_FOLDER, '权属证明', filename)
+            if os.path.exists(other_path):
+                size = os.path.getsize(other_path)
+                files.append({'path': other_path, 'arcname': filename, 'size': size})
+                total_size += size
+
+        if files:
+            work_files.append({
+                'work_name': work['work_name'],
+                'files': files,
+                'total_size': total_size
+            })
+
+    if not work_files:
+        return error('没有找到可打包的文件')
+
+    # 分包逻辑：按作品顺序依次放入包，当加入下一个作品会超过限制时，开始新包
+    packages = []
+    current_package = []
+    current_size = 0
+
+    for wf in work_files:
+        # 如果当前包为空，或者加入这个作品不超过限制
+        if not current_package or (current_size + wf['total_size'] <= max_size_bytes):
+            current_package.append(wf)
+            current_size += wf['total_size']
+        else:
+            # 当前包已满，保存并开始新包
+            packages.append(current_package)
+            current_package = [wf]
+            current_size = wf['total_size']
+
+    # 最后一个包
+    if current_package:
+        packages.append(current_package)
+
+    today = datetime.now().strftime('%Y%m%d')
+
+    # 如果只有一个包，直接返回
+    if len(packages) == 1:
+        temp_zip = tempfile.NamedTemporaryFile(delete=False, suffix='.zip')
+        temp_zip.close()
+
+        try:
+            with zipfile.ZipFile(temp_zip.name, 'w', zipfile.ZIP_DEFLATED) as zipf:
+                for wf in packages[0]:
+                    for file_info in wf['files']:
+                        zipf.write(file_info['path'], file_info['arcname'])
+
+            zip_filename = f"作品打包_共{len(works)}部_{today}.zip"
+
+            response = send_file(
+                temp_zip.name,
+                as_attachment=True,
+                mimetype='application/zip'
+            )
+
+            encoded_filename = quote(zip_filename)
+            response.headers['Content-Disposition'] = f'attachment; filename="{encoded_filename}"'
+
+            @response.call_on_close
+            def cleanup():
+                try:
+                    os.unlink(temp_zip.name)
+                except:
+                    pass
+
+            return response
+        except Exception as e:
+            try:
+                os.unlink(temp_zip.name)
+            except:
+                pass
+            return error(f'打包失败: {str(e)}')
+
+    # 多个包：创建临时目录，生成多个子zip，再打包成总zip
+    temp_dir = tempfile.mkdtemp()
+    temp_final_zip = tempfile.NamedTemporaryFile(delete=False, suffix='.zip')
+    temp_final_zip.close()
 
     try:
-        with zipfile.ZipFile(temp_zip.name, 'w', zipfile.ZIP_DEFLATED) as zipf:
-            for work in works:
-                # 添加权属证明
-                if work.get('proof_file'):
-                    proof_path = os.path.join(Config.UPLOAD_FOLDER, '权属证明', work['proof_file'])
-                    if os.path.exists(proof_path):
-                        zipf.write(proof_path, work['proof_file'])
+        sub_zips = []
+        for idx, package in enumerate(packages, start=1):
+            sub_zip_path = os.path.join(temp_dir, f"作品打包_第{idx}包_共{len(works)}部_{today}.zip")
+            with zipfile.ZipFile(sub_zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+                for wf in package:
+                    for file_info in wf['files']:
+                        zipf.write(file_info['path'], file_info['arcname'])
+            sub_zips.append(sub_zip_path)
 
-                # 添加其他证明
-                other_files = work.get('other_files', []) or []
-                for filename in other_files:
-                    other_path = os.path.join(Config.UPLOAD_FOLDER, '权属证明', filename)
-                    if os.path.exists(other_path):
-                        zipf.write(other_path, filename)
+        # 把所有子zip打包到总zip
+        with zipfile.ZipFile(temp_final_zip.name, 'w', zipfile.ZIP_DEFLATED) as final_zipf:
+            for sub_zip in sub_zips:
+                final_zipf.write(sub_zip, os.path.basename(sub_zip))
 
-        # 生成文件名
-        today = datetime.now().strftime('%Y%m%d')
-        zip_filename = f"作品打包_共{len(works)}部_{today}.zip"
+        final_filename = f"作品打包_共{len(works)}部_分{len(packages)}包_{today}.zip"
 
         response = send_file(
-            temp_zip.name,
+            temp_final_zip.name,
             as_attachment=True,
             mimetype='application/zip'
         )
 
-        # 手动设置 Content-Disposition 响应头，支持中文文件名
-        encoded_filename = quote(zip_filename)
+        encoded_filename = quote(final_filename)
         response.headers['Content-Disposition'] = f'attachment; filename="{encoded_filename}"'
 
-        # 响应发送后删除临时文件
         @response.call_on_close
         def cleanup():
             try:
-                os.unlink(temp_zip.name)
+                os.unlink(temp_final_zip.name)
+                import shutil
+                shutil.rmtree(temp_dir, ignore_errors=True)
             except:
                 pass
 
         return response
     except Exception as e:
-        # 出错时立即删除临时文件
         try:
-            os.unlink(temp_zip.name)
+            os.unlink(temp_final_zip.name)
+            import shutil
+            shutil.rmtree(temp_dir, ignore_errors=True)
         except:
             pass
         return error(f'打包失败: {str(e)}')

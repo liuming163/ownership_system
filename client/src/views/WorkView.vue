@@ -125,6 +125,19 @@
         <el-button @click="otherFilesDialogVisible = false">关闭</el-button>
       </template>
     </el-dialog>
+
+    <!-- 打包体积限制弹窗 -->
+    <el-dialog v-model="packageDialogVisible" title="打包下载" width="400px">
+      <el-form label-width="160px">
+        <el-form-item label="单文件打包最大体积(MB)">
+          <el-input-number v-model="maxPackageSize" :min="1" :max="1000" :precision="0" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="packageDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="packaging" @click="confirmPackage">确定</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -160,6 +173,9 @@ const proofUploadRef = ref(null)
 const otherUploadRef = ref(null)
 const otherFilesDialogVisible = ref(false)
 const currentOtherFiles = ref([])
+const packageDialogVisible = ref(false)
+const maxPackageSize = ref(18)
+const packaging = ref(false)
 const addForm = reactive({
   company_id: null,
   agent_id: null,
@@ -366,13 +382,20 @@ async function handlePackage() {
   if (selectedWorks.value.length === 0) {
     return ElMessage.warning('请选择要打包的作品')
   }
+  packageDialogVisible.value = true
+}
 
+async function confirmPackage() {
   const workIds = selectedWorks.value.map(w => w.id)
+  packaging.value = true
   try {
     const response = await fetch('/api/works/package', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ work_ids: workIds })
+      body: JSON.stringify({
+        work_ids: workIds,
+        max_size_mb: maxPackageSize.value
+      })
     })
 
     if (!response.ok) {
@@ -391,8 +414,11 @@ async function handlePackage() {
     document.body.removeChild(a)
     window.URL.revokeObjectURL(url)
     ElMessage.success('打包成功')
+    packageDialogVisible.value = false
   } catch (e) {
     ElMessage.error('打包失败：' + e.message)
+  } finally {
+    packaging.value = false
   }
 }
 </script>
