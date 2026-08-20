@@ -37,6 +37,7 @@
       <el-table-column prop="company_name" label="代理主体" width="160" />
       <el-table-column prop="agent_name" label="被代理人" width="160" />
       <el-table-column prop="work_name" label="作品名称" min-width="180" />
+      <el-table-column prop="alias" label="别名" min-width="150" />
       <el-table-column label="权属证明" width="100" align="center">
         <template #default="{ row }">
           <el-button type="primary" link size="small" @click="viewFile('权属证明', row.proof_file)">
@@ -86,6 +87,9 @@
         </el-form-item>
         <el-form-item label="作品名称" required>
           <el-input v-model="addForm.work_name" placeholder="请输入作品名称" />
+        </el-form-item>
+        <el-form-item label="别名">
+          <el-input v-model="addForm.alias" placeholder="请输入别名（可选）" />
         </el-form-item>
         <el-form-item label="权属证明" required>
           <el-upload ref="proofUploadRef" :auto-upload="false" :limit="1" :on-change="(f) => addForm._proofFile = f.raw" accept=".jpg,.jpeg,.png,.pdf">
@@ -160,6 +164,7 @@ const addForm = reactive({
   company_id: null,
   agent_id: null,
   work_name: '',
+  alias: '',
   _proofFile: null,
   _otherFiles: [],
 })
@@ -226,6 +231,7 @@ function showAddDialog() {
   addForm.company_id = null
   addForm.agent_id = null
   addForm.work_name = ''
+  addForm.alias = ''
   addForm._proofFile = null
   addForm._otherFiles = []
   addAgentOptions.value = []
@@ -248,6 +254,9 @@ async function handleAdd() {
     fd.append('company_id', addForm.company_id)
     fd.append('agent_id', addForm.agent_id)
     fd.append('work_name', addForm.work_name.trim())
+    if (addForm.alias.trim()) {
+      fd.append('alias', addForm.alias.trim())
+    }
     fd.append('proof_file', addForm._proofFile)
     for (const f of addForm._otherFiles) {
       fd.append('other_files', f)
@@ -261,6 +270,7 @@ async function handleAdd() {
       addForm.company_id = null
       addForm.agent_id = null
       addForm.work_name = ''
+      addForm.alias = ''
       addForm._proofFile = null
       addForm._otherFiles = []
       addAgentOptions.value = []

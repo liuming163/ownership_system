@@ -32,7 +32,7 @@ def list_works(company_id=None, agent_id=None, search_keywords=None):
         where = f"WHERE {' AND '.join(conditions)}" if conditions else ''
         rows = session.execute(text(f"""
             SELECT w.id, w.company_id, c.company_name, w.agent_id, a.agent_name,
-                   w.work_name, w.proof_file, w.other_files,
+                   w.work_name, w.alias, w.proof_file, w.other_files,
                    w.created_by, w.created_at, w.updated_at
             FROM works w
             JOIN companies c ON c.id = w.company_id
@@ -47,7 +47,7 @@ def get_work(work_id):
     with get_db_session() as session:
         row = session.execute(text("""
             SELECT w.id, w.company_id, c.company_name, w.agent_id, a.agent_name,
-                   w.work_name, w.proof_file, w.other_files,
+                   w.work_name, w.alias, w.proof_file, w.other_files,
                    w.created_by, w.created_at, w.updated_at
             FROM works w
             JOIN companies c ON c.id = w.company_id
@@ -57,7 +57,7 @@ def get_work(work_id):
     return _row_to_dict(row) if row else None
 
 
-def create_work(company_id, agent_id, work_name, proof_file, other_files, created_by):
+def create_work(company_id, agent_id, work_name, alias, proof_file, other_files, created_by):
     with get_db_session() as session:
         # 检查代理主体和被代理人
         agent = session.execute(text("""
@@ -69,12 +69,13 @@ def create_work(company_id, agent_id, work_name, proof_file, other_files, create
         other_json = json.dumps(other_files, ensure_ascii=False) if other_files else None
 
         session.execute(text("""
-            INSERT INTO works (company_id, agent_id, work_name, proof_file, other_files, created_by)
-            VALUES (:company_id, :agent_id, :work_name, :proof_file, :other_files, :created_by)
+            INSERT INTO works (company_id, agent_id, work_name, alias, proof_file, other_files, created_by)
+            VALUES (:company_id, :agent_id, :work_name, :alias, :proof_file, :other_files, :created_by)
         """), {
             'company_id': company_id,
             'agent_id': agent_id,
             'work_name': work_name.strip(),
+            'alias': alias.strip() if alias else None,
             'proof_file': proof_file,
             'other_files': other_json,
             'created_by': created_by,
@@ -179,6 +180,7 @@ def _row_to_dict(row):
         'agent_id': row['agent_id'],
         'agent_name': row['agent_name'],
         'work_name': row['work_name'],
+        'alias': row['alias'],
         'proof_file': row['proof_file'],
         'other_files': other_files,
         'created_by': row['created_by'],

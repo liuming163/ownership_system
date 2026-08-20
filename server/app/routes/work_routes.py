@@ -41,6 +41,7 @@ def create_work():
     company_id = request.form.get('company_id', type=int)
     agent_id = request.form.get('agent_id', type=int)
     work_name = request.form.get('work_name', '').strip()
+    alias = request.form.get('alias', '').strip()
     proof_file = request.files.get('proof_file')
     other_files = request.files.getlist('other_files')
 
@@ -66,6 +67,7 @@ def create_work():
         company_id=company_id,
         agent_id=agent_id,
         work_name=work_name,
+        alias=alias if alias else None,
         proof_file=proof_filename,
         other_files=other_filenames if other_filenames else None,
         created_by=get_current_user(),

@@ -50,6 +50,7 @@ CREATE TABLE works (
     company_id   INT          NOT NULL COMMENT '代理主体',
     agent_id     INT          NOT NULL COMMENT '被代理人',
     work_name    VARCHAR(255) NOT NULL COMMENT '作品名称',
+    alias        VARCHAR(255) NOT NULL COMMENT '作品别名',
     proof_file   VARCHAR(500) NOT NULL COMMENT '权属证明文件名',
     other_files  JSON         NULL     COMMENT '其他证明文件列表',
     created_by   VARCHAR(100) COMMENT '创建人',
