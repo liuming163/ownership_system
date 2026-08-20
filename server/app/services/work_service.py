@@ -19,13 +19,15 @@ def list_works(company_id=None, agent_id=None, search_keywords=None):
             params['agent_id'] = agent_id
 
         # 模糊搜索：按 _ 分隔关键词，OR 关系
+        # 同时搜索作品名称和别名（别名也按 _ 拆分）
         if search_keywords:
             keywords = [kw.strip() for kw in search_keywords.split('_') if kw.strip()]
             if keywords:
                 or_parts = []
                 for idx, kw in enumerate(keywords):
                     param_name = f'kw{idx}'
-                    or_parts.append(f'w.work_name LIKE :{param_name}')
+                    # 搜索作品名称或别名中包含该关键词
+                    or_parts.append(f'(w.work_name LIKE :{param_name} OR w.alias LIKE :{param_name})')
                     params[param_name] = f'%{kw}%'
                 conditions.append(f"({' OR '.join(or_parts)})")
 

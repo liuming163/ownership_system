@@ -14,7 +14,7 @@
     <div class="filter-bar">
       <el-input
         v-model="searchKeywords"
-        placeholder="搜索作品名称（多个用_分隔，如：作品1_作品2）"
+        placeholder="搜索作品名称或别名（多个用_分隔，如：作品1_别名2）"
         clearable
         @input="onSearchInput"
         style="margin-right: 12px; flex: 1"
@@ -89,7 +89,7 @@
           <el-input v-model="addForm.work_name" placeholder="请输入作品名称" />
         </el-form-item>
         <el-form-item label="别名">
-          <el-input v-model="addForm.alias" placeholder="请输入别名（可选）" />
+          <el-input v-model="addForm.alias" placeholder="多个别名请用下划线_拼接（可选）" />
         </el-form-item>
         <el-form-item label="权属证明" required>
           <el-upload ref="proofUploadRef" :auto-upload="false" :limit="1" :on-change="(f) => addForm._proofFile = f.raw" accept=".jpg,.jpeg,.png,.pdf">
@@ -193,8 +193,17 @@ async function loadData() {
         const matchedSet = new Set()
         works.value.forEach(w => {
           keywords.forEach(kw => {
+            // 检查作品名称
             if (w.work_name.includes(kw)) {
               matchedSet.add(kw)
+              return
+            }
+            // 检查别名（别名也按下划线拆分）
+            if (w.alias) {
+              const aliases = w.alias.split('_').map(a => a.trim()).filter(a => a)
+              if (aliases.some(alias => alias.includes(kw))) {
+                matchedSet.add(kw)
+              }
             }
           })
         })
