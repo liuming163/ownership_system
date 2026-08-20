@@ -184,31 +184,69 @@ async function loadData() {
     if (searchKeywords.value) params.search = searchKeywords.value
     const res = await getWorks(params)
     if (res.success) {
-      works.value = res.data
+      let resultWorks = res.data
 
-      // 检查未匹配的关键词
+      // 检查未匹配的关键词，并按关键词热度排序
       unmatchedKeywords.value = []
       if (searchKeywords.value) {
         const keywords = searchKeywords.value.split('_').map(k => k.trim()).filter(k => k)
         const matchedSet = new Set()
-        works.value.forEach(w => {
+
+        // 统计每个关键词匹配了多少部作品
+        const keywordMatchCount = {}
+        keywords.forEach(kw => {
+          keywordMatchCount[kw] = 0
+        })
+
+        resultWorks.forEach(w => {
           keywords.forEach(kw => {
+            let matched = false
             // 检查作品名称
             if (w.work_name.includes(kw)) {
-              matchedSet.add(kw)
-              return
+              matched = true
             }
             // 检查别名（别名也按下划线拆分）
-            if (w.alias) {
+            if (!matched && w.alias) {
               const aliases = w.alias.split('_').map(a => a.trim()).filter(a => a)
               if (aliases.some(alias => alias.includes(kw))) {
-                matchedSet.add(kw)
+                matched = true
               }
+            }
+            if (matched) {
+              matchedSet.add(kw)
+              keywordMatchCount[kw]++
             }
           })
         })
+
+        // 给每部作品计算权重（匹配到的关键词中，取最高的匹配数量）
+        resultWorks = resultWorks.map(w => {
+          let maxWeight = 0
+          keywords.forEach(kw => {
+            let matched = false
+            if (w.work_name.includes(kw)) {
+              matched = true
+            }
+            if (!matched && w.alias) {
+              const aliases = w.alias.split('_').map(a => a.trim()).filter(a => a)
+              if (aliases.some(alias => alias.includes(kw))) {
+                matched = true
+              }
+            }
+            if (matched && keywordMatchCount[kw] > maxWeight) {
+              maxWeight = keywordMatchCount[kw]
+            }
+          })
+          return { ...w, _weight: maxWeight }
+        })
+
+        // 按权重从高到低排序
+        resultWorks.sort((a, b) => b._weight - a._weight)
+
         unmatchedKeywords.value = keywords.filter(kw => !matchedSet.has(kw))
       }
+
+      works.value = resultWorks
     }
   } finally {
     loading.value = false
