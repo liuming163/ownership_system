@@ -14,6 +14,7 @@ node_modules/
 
 # Uploads (not tracked)
 server/uploads/
+server/static/dist/
 
 # IDE
 .idea/
