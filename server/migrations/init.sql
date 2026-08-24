@@ -55,7 +55,8 @@ CREATE TABLE works (
     other_files  JSON         NULL     COMMENT '其他证明文件列表',
     created_by   VARCHAR(100) COMMENT '创建人',
     created_at   DATETIME     DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-    updated_at   DATETIME     DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    updated_by   VARCHAR(100) COMMENT '最近更新人',
+    updated_at   DATETIME     NULL COMMENT '最近更新时间',
     FOREIGN KEY (company_id) REFERENCES companies(id),
     FOREIGN KEY (agent_id)   REFERENCES agents(id)
 ) ENGINE=InnoDB COMMENT '作品';

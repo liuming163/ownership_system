@@ -80,6 +80,7 @@ def create_work():
 @work_bp.route('/<int:work_id>', methods=['PUT'])
 @login_required
 def update_work(work_id):
+    alias = request.form.get('alias', '').strip() if 'alias' in request.form else None
     proof_file = request.files.get('proof_file')
     other_files = request.files.getlist('other_files')
 
@@ -96,12 +97,18 @@ def update_work(work_id):
     new_others = None
     valid_others = [f for f in other_files if f and f.filename]
     if valid_others:
-        new_others = existing.get('other_files', []) or []
-        for idx, f in enumerate(valid_others, start=len(new_others) + 1):
+        new_others = []
+        for idx, f in enumerate(valid_others, start=1):
             fname = file_service.save_other_proof_file(f, safe_work_name, idx)
             new_others.append(fname)
 
-    data, err = work_service.update_work(work_id, proof_file=new_proof, other_files=new_others)
+    data, err = work_service.update_work(
+        work_id,
+        alias=alias,
+        proof_file=new_proof,
+        other_files=new_others,
+        updated_by=get_current_user()
+    )
     if err:
         return error(err)
     return success(data)

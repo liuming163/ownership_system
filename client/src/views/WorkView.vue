@@ -67,8 +67,19 @@
       </el-table-column>
       <el-table-column prop="created_by" label="创建人" width="100" />
       <el-table-column prop="created_at" label="创建时间" width="180" />
-      <el-table-column label="操作" width="120" align="center">
+      <el-table-column prop="updated_by" label="最近更新人" width="120">
         <template #default="{ row }">
+          {{ row.updated_by || '-' }}
+        </template>
+      </el-table-column>
+      <el-table-column prop="updated_at" label="最近更新时间" width="180">
+        <template #default="{ row }">
+          {{ row.updated_at || '-' }}
+        </template>
+      </el-table-column>
+      <el-table-column label="操作" width="180" align="center">
+        <template #default="{ row }">
+          <el-button type="primary" link size="small" @click="showUpdateDialog(row)">更新</el-button>
           <el-popconfirm title="确定删除该作品？" @confirm="handleDelete(row.id)">
             <template #reference>
               <el-button type="danger" link size="small">删除</el-button>
@@ -111,6 +122,44 @@
       <template #footer>
         <el-button @click="addDialogVisible = false">取消</el-button>
         <el-button type="primary" :loading="submitting" @click="handleAdd">确定</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 更新作品弹窗 -->
+    <el-dialog v-model="updateDialogVisible" title="更新作品" width="550px">
+      <el-form :model="updateForm" label-width="110px">
+        <el-form-item label="代理主体" required>
+          <el-input v-model="updateForm.company_name" disabled />
+        </el-form-item>
+        <el-form-item label="被代理人" required>
+          <el-input v-model="updateForm.agent_name" disabled />
+        </el-form-item>
+        <el-form-item label="作品名称" required>
+          <el-input v-model="updateForm.work_name" disabled />
+        </el-form-item>
+        <el-form-item label="别名">
+          <el-input v-model="updateForm.alias" placeholder="多个别名请用下划线_拼接（可选）" />
+        </el-form-item>
+        <el-form-item label="权属证明">
+          <el-upload ref="updateProofUploadRef" :auto-upload="false" :limit="1" :on-change="(f) => updateForm._proofFile = f.raw" accept=".jpg,.jpeg,.png,.pdf">
+            <el-button size="small" type="primary">选择文件（替换）</el-button>
+          </el-upload>
+          <div v-if="updateForm.proof_file" style="margin-top: 8px; font-size: 12px; color: #909399">
+            当前文件：{{ updateForm.proof_file }}
+          </div>
+        </el-form-item>
+        <el-form-item label="其他证明">
+          <el-upload ref="updateOtherUploadRef" :auto-upload="false" :limit="2" :on-change="handleUpdateOtherChange" multiple accept=".jpg,.jpeg,.png,.pdf">
+            <el-button size="small">选择文件（最多2个，替换全部）</el-button>
+          </el-upload>
+          <div v-if="updateForm.other_files && updateForm.other_files.length > 0" style="margin-top: 8px; font-size: 12px; color: #909399">
+            当前文件：{{ updateForm.other_files.join('、') }}
+          </div>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="updateDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="submitting" @click="handleUpdate">确定</el-button>
       </template>
     </el-dialog>
 
@@ -175,7 +224,7 @@
 import { ref, reactive, onMounted, onUnmounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Document } from '@element-plus/icons-vue'
-import { getWorks, createWork, deleteWork } from '../api/work'
+import { getWorks, createWork, updateWork, deleteWork } from '../api/work'
 import { getCompanies } from '../api/company'
 import { getAgents } from '../api/agent'
 import * as XLSX from 'xlsx'
@@ -218,8 +267,11 @@ function onSearchInput() {
 onUnmounted(() => clearTimeout(searchTimer))
 
 const addDialogVisible = ref(false)
+const updateDialogVisible = ref(false)
 const proofUploadRef = ref(null)
 const otherUploadRef = ref(null)
+const updateProofUploadRef = ref(null)
+const updateOtherUploadRef = ref(null)
 const otherFilesDialogVisible = ref(false)
 const currentOtherFiles = ref([])
 const packageDialogVisible = ref(false)
@@ -232,6 +284,18 @@ const addForm = reactive({
   alias: '',
   _proofFile: null,
   _otherFiles: [],
+})
+const updateForm = reactive({
+  id: null,
+  company_name: '',
+  agent_name: '',
+  work_name: '',
+  alias: '',
+  proof_file: '',
+  other_files: [],
+  _proofFile: null,
+  _otherFiles: [],
+  _originalAlias: '', // 保存原始别名用于对比
 })
 
 onMounted(async () => {
@@ -375,6 +439,68 @@ function showAddDialog() {
 
 function handleOtherChange(file, fileList) {
   addForm._otherFiles = fileList.map(f => f.raw)
+}
+
+function handleUpdateOtherChange(file, fileList) {
+  updateForm._otherFiles = fileList.map(f => f.raw)
+}
+
+function showUpdateDialog(row) {
+  updateForm.id = row.id
+  updateForm.company_name = row.company_name
+  updateForm.agent_name = row.agent_name
+  updateForm.work_name = row.work_name
+  updateForm.alias = row.alias || ''
+  updateForm._originalAlias = row.alias || ''
+  updateForm.proof_file = row.proof_file
+  updateForm.other_files = row.other_files || []
+  updateForm._proofFile = null
+  updateForm._otherFiles = []
+  updateDialogVisible.value = true
+}
+
+async function handleUpdate() {
+  const hasAliasChange = updateForm.alias !== updateForm._originalAlias
+  const hasProofChange = updateForm._proofFile !== null
+  const hasOtherChange = updateForm._otherFiles.length > 0
+
+  if (!hasAliasChange && !hasProofChange && !hasOtherChange) {
+    return ElMessage.warning('请至少修改一项内容')
+  }
+
+  submitting.value = true
+  try {
+    const fd = new FormData()
+
+    if (hasAliasChange) {
+      fd.append('alias', updateForm.alias.trim())
+    }
+
+    if (hasProofChange) {
+      fd.append('proof_file', updateForm._proofFile)
+    }
+
+    if (hasOtherChange) {
+      for (const f of updateForm._otherFiles) {
+        fd.append('other_files', f)
+      }
+    }
+
+    const res = await updateWork(updateForm.id, fd)
+    if (res.success) {
+      ElMessage.success('更新成功')
+      updateDialogVisible.value = false
+      updateProofUploadRef.value?.clearFiles()
+      updateOtherUploadRef.value?.clearFiles()
+      loadData()
+    } else {
+      ElMessage.error(res.error)
+    }
+  } catch (e) {
+    ElMessage.error(e.response?.data?.error || '更新失败')
+  } finally {
+    submitting.value = false
+  }
 }
 
 async function handleAdd() {
