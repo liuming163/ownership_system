@@ -34,9 +34,14 @@ export const useUserStore = defineStore('user', {
     },
 
     async logout() {
+      const uid = this.uid
       await logout()
       this.username = ''
       this.uid = null
+      // 清除授权到期提醒标记，下次登录重新提醒
+      if (uid) {
+        sessionStorage.removeItem(`auth_expiry_notified_${uid}`)
+      }
     },
   },
 })

@@ -59,8 +59,8 @@ async function handleLogout() {
 // 登录后检查授权委托书到期提醒
 onMounted(() => {
   setTimeout(async () => {
-    // 检查本次会话是否已提醒过
-    const notified = sessionStorage.getItem('auth_expiry_notified')
+    // 检查当前用户本次登录是否已提醒过
+    const notified = sessionStorage.getItem(`auth_expiry_notified_${userStore.uid}`)
     if (notified) return
 
     try {
@@ -69,7 +69,7 @@ onMounted(() => {
 
       if (expired.length === 0 && expiring_soon.length === 0) {
         // 没有需要提醒的，标记为已提醒
-        sessionStorage.setItem('auth_expiry_notified', 'true')
+        sessionStorage.setItem(`auth_expiry_notified_${userStore.uid}`, 'true')
         return
       }
 
@@ -106,7 +106,7 @@ onMounted(() => {
       })
 
       // 标记为已提醒
-      sessionStorage.setItem('auth_expiry_notified', 'true')
+      sessionStorage.setItem(`auth_expiry_notified_${userStore.uid}`, 'true')
     } catch (error) {
       console.error('检查授权到期失败:', error)
     }
