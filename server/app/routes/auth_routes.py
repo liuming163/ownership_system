@@ -30,7 +30,10 @@ def login():
     session['uid'] = result['user_info'].get('uid')
     session['login_time'] = time.time()
 
-    return success({'username': result['user_info']['username']})
+    return success({
+        'username': result['user_info']['username'],
+        'uid': result['user_info'].get('uid'),
+    })
 
 
 @auth_bp.route('/logout', methods=['POST'])

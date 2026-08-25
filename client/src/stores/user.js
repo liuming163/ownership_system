@@ -7,12 +7,18 @@ export const useUserStore = defineStore('user', {
     uid: null,
   }),
 
+  getters: {
+    canDelete() {
+      return this.uid === 1717602
+    },
+  },
+
   actions: {
     async fetchUser() {
       const res = await getUserInfo()
       if (res.success) {
         this.username = res.data.username
-        this.uid = res.data.uid
+        this.uid = res.data.uid ? Number(res.data.uid) : null
       } else {
         throw new Error(res.error || '未登录')
       }
@@ -22,6 +28,7 @@ export const useUserStore = defineStore('user', {
       const res = await login(username, password)
       if (res.success) {
         this.username = res.data.username
+        this.uid = res.data.uid ? Number(res.data.uid) : null
       }
       return res
     },

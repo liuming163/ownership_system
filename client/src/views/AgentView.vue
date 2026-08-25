@@ -44,7 +44,7 @@
         <template #default="{ row }">
           <el-button type="primary" link size="small" @click="showUpdateAuthDialog(row)">更新授权</el-button>
           <el-button type="info" link size="small" @click="showHistory(row)">历史</el-button>
-          <el-popconfirm title="确定删除？" @confirm="handleDelete(row.id)">
+          <el-popconfirm v-if="userStore.canDelete" title="确定删除？" @confirm="handleDelete(row.id)">
             <template #reference>
               <el-button type="danger" link size="small">删除</el-button>
             </template>
@@ -129,6 +129,9 @@ import { ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { getAgents, createAgent, updateAgentAuth, getAuthHistory, deleteAgent } from '../api/agent'
 import { getCompanies } from '../api/company'
+import { useUserStore } from '../stores/user'
+
+const userStore = useUserStore()
 
 const agents = ref([])
 const companyOptions = ref([])

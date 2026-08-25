@@ -80,7 +80,7 @@
       <el-table-column label="操作" width="180" align="center">
         <template #default="{ row }">
           <el-button type="primary" link size="small" @click="showUpdateDialog(row)">更新</el-button>
-          <el-popconfirm title="确定删除该作品？" @confirm="handleDelete(row.id)">
+          <el-popconfirm v-if="userStore.canDelete" title="确定删除该作品？" @confirm="handleDelete(row.id)">
             <template #reference>
               <el-button type="danger" link size="small">删除</el-button>
             </template>
@@ -227,7 +227,10 @@ import { Document } from '@element-plus/icons-vue'
 import { getWorks, createWork, updateWork, deleteWork } from '../api/work'
 import { getCompanies } from '../api/company'
 import { getAgents } from '../api/agent'
+import { useUserStore } from '../stores/user'
 import * as XLSX from 'xlsx'
+
+const userStore = useUserStore()
 
 const works = ref([])
 const companyOptions = ref([])

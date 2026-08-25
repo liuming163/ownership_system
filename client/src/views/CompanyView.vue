@@ -24,7 +24,7 @@
       <el-table-column label="操作" width="150" align="center">
         <template #default="{ row }">
           <el-button type="primary" link size="small" @click="showEditDialog(row)">编辑</el-button>
-          <el-popconfirm title="确定删除该代理主体？" @confirm="handleDelete(row.id)">
+          <el-popconfirm v-if="userStore.canDelete" title="确定删除该代理主体？" @confirm="handleDelete(row.id)">
             <template #reference>
               <el-button type="danger" link size="small">删除</el-button>
             </template>
@@ -74,6 +74,9 @@
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { getCompanies, createCompany, updateCompany, deleteCompany } from '../api/company'
+import { useUserStore } from '../stores/user'
+
+const userStore = useUserStore()
 
 const companies = ref([])
 const loading = ref(false)
