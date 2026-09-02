@@ -492,6 +492,7 @@ async function handleUpdate() {
     const res = await updateWork(updateForm.id, fd)
     if (res.success) {
       ElMessage.success('更新成功')
+      if (res.warning) ElMessage.warning(res.warning)
       updateDialogVisible.value = false
       updateProofUploadRef.value?.clearFiles()
       updateOtherUploadRef.value?.clearFiles()
@@ -529,6 +530,7 @@ async function handleAdd() {
     const res = await createWork(fd)
     if (res.success) {
       ElMessage.success('添加成功')
+      if (res.warning) ElMessage.warning(res.warning)
       addDialogVisible.value = false
       // 清空表单和上传文件
       addForm.company_id = null

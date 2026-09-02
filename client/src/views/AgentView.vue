@@ -209,6 +209,7 @@ async function handleAdd() {
     const res = await createAgent(fd)
     if (res.success) {
       ElMessage.success('新增成功')
+      if (res.warning) ElMessage.warning(res.warning)
       addDialogVisible.value = false
       loadData()
     } else {
@@ -240,6 +241,7 @@ async function handleUpdateAuth() {
     const res = await updateAgentAuth(authForm.agent_id, fd)
     if (res.success) {
       ElMessage.success('更新成功')
+      if (res.warning) ElMessage.warning(res.warning)
       authDialogVisible.value = false
       loadData()
     } else {

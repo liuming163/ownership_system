@@ -55,13 +55,16 @@ def create_work():
     safe_work_name = sanitize_filename_part(work_name)
 
     # 保存权属证明
-    proof_filename = file_service.save_proof_file(proof_file, safe_work_name)
+    proof_filename, proof_warn = file_service.save_proof_file(proof_file, safe_work_name)
 
     # 保存其他证明
     other_filenames = []
+    other_warnings = []
     for idx, f in enumerate([f for f in other_files if f and f.filename], start=1):
-        fname = file_service.save_other_proof_file(f, safe_work_name, idx)
+        fname, fw = file_service.save_other_proof_file(f, safe_work_name, idx)
         other_filenames.append(fname)
+        if fw:
+            other_warnings.append(fw)
 
     data, err = work_service.create_work(
         company_id=company_id,
@@ -74,7 +77,8 @@ def create_work():
     )
     if err:
         return error(err)
-    return success(data)
+    warnings = [w for w in [proof_warn] + other_warnings if w]
+    return success(data, warning='；'.join(warnings) if warnings else None)
 
 
 @work_bp.route('/<int:work_id>', methods=['PUT'])
@@ -91,16 +95,20 @@ def update_work(work_id):
     safe_work_name = sanitize_filename_part(existing['work_name'])
 
     new_proof = None
+    proof_warn = None
     if proof_file and proof_file.filename:
-        new_proof = file_service.save_proof_file(proof_file, safe_work_name)
+        new_proof, proof_warn = file_service.save_proof_file(proof_file, safe_work_name)
 
     new_others = None
+    other_warnings = []
     valid_others = [f for f in other_files if f and f.filename]
     if valid_others:
         new_others = []
         for idx, f in enumerate(valid_others, start=1):
-            fname = file_service.save_other_proof_file(f, safe_work_name, idx)
+            fname, fw = file_service.save_other_proof_file(f, safe_work_name, idx)
             new_others.append(fname)
+            if fw:
+                other_warnings.append(fw)
 
     data, err = work_service.update_work(
         work_id,
@@ -111,7 +119,8 @@ def update_work(work_id):
     )
     if err:
         return error(err)
-    return success(data)
+    warnings = [w for w in [proof_warn] + other_warnings if w]
+    return success(data, warning='；'.join(warnings) if warnings else None)
 
 
 @work_bp.route('/<int:work_id>', methods=['DELETE'])

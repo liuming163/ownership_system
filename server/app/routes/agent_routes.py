@@ -75,8 +75,8 @@ def create_agent():
     safe_company_name = sanitize_filename_part(normalize_company_name(company['company_name']))
 
     # 保存文件
-    license_filename = file_service.save_agent_license(license_file, safe_name)
-    auth_filename = file_service.save_auth_file(auth_file, safe_name, safe_company_name, auth_expires_on)
+    license_filename, license_warn = file_service.save_agent_license(license_file, safe_name)
+    auth_filename, auth_warn = file_service.save_auth_file(auth_file, safe_name, safe_company_name, auth_expires_on)
 
     data, err = agent_service.create_agent(
         company_id=company_id,
@@ -90,7 +90,9 @@ def create_agent():
     )
     if err:
         return error(err)
-    return success(data)
+    # 合并两个文件的 warning（如果有）
+    warnings = [w for w in (license_warn, auth_warn) if w]
+    return success(data, warning='；'.join(warnings) if warnings else None)
 
 
 @agent_bp.route('/<int:agent_id>/auth', methods=['PUT'])
@@ -111,7 +113,7 @@ def update_auth(agent_id):
 
     safe_name = sanitize_filename_part(normalize_company_name(existing['agent_name']))
     safe_company_name = sanitize_filename_part(normalize_company_name(existing['company_name']))
-    auth_filename = file_service.save_auth_file(auth_file, safe_name, safe_company_name, auth_expires_on)
+    auth_filename, warning = file_service.save_auth_file(auth_file, safe_name, safe_company_name, auth_expires_on)
 
     data, err = agent_service.update_agent_auth(
         agent_id=agent_id,
@@ -121,7 +123,7 @@ def update_auth(agent_id):
     )
     if err:
         return error(err)
-    return success(data)
+    return success(data, warning=warning)
 
 
 @agent_bp.route('/<int:agent_id>/auth/history', methods=['GET'])

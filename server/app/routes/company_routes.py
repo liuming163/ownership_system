@@ -43,7 +43,7 @@ def create_company():
 
     # 保存文件
     safe_name = sanitize_filename_part(normalize_company_name(company_name))
-    filename = file_service.save_company_license(license_file, safe_name)
+    filename, warning = file_service.save_company_license(license_file, safe_name)
 
     data, err = company_service.create_company(
         company_name=company_name,
@@ -54,7 +54,7 @@ def create_company():
     )
     if err:
         return error(err)
-    return success(data)
+    return success(data, warning=warning)
 
 
 @company_bp.route('/<int:company_id>', methods=['PUT'])
@@ -65,12 +65,13 @@ def update_company(company_id):
     license_file = request.files.get('license_file')
 
     new_license = None
+    warning = None
     if license_file and license_file.filename:
         existing = company_service.get_company(company_id)
         if not existing:
             return error('代理主体不存在', 404)
         safe_name = sanitize_filename_part(normalize_company_name(existing['company_name']))
-        new_license = file_service.save_company_license(license_file, safe_name)
+        new_license, warning = file_service.save_company_license(license_file, safe_name)
 
     data, err = company_service.update_company(
         company_id,
@@ -80,7 +81,7 @@ def update_company(company_id):
     )
     if err:
         return error(err)
-    return success(data)
+    return success(data, warning=warning)
 
 
 @company_bp.route('/<int:company_id>', methods=['DELETE'])

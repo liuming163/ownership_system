@@ -3,12 +3,14 @@
 from flask import jsonify
 
 
-def success(data=None, message=None):
+def success(data=None, message=None, warning=None):
     resp = {'success': True}
     if data is not None:
         resp['data'] = data
     if message:
         resp['message'] = message
+    if warning:
+        resp['warning'] = warning
     return jsonify(resp)
 
 

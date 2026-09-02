@@ -169,6 +169,7 @@ async function handleSubmit() {
 
     if (res.success) {
       ElMessage.success(isEdit.value ? '更新成功' : '新增成功')
+      if (res.warning) ElMessage.warning(res.warning)
       dialogVisible.value = false
       loadData()
     } else {
