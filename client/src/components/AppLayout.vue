@@ -27,6 +27,7 @@
     <el-container>
       <el-header class="layout-header">
         <span>{{ userStore.username }}</span>
+        <el-button type="text" @click="openGuide">使用指南</el-button>
         <el-button type="text" @click="handleLogout">退出登录</el-button>
       </el-header>
 
@@ -54,6 +55,14 @@ const activeMenu = computed(() => route.path)
 async function handleLogout() {
   await userStore.logout()
   router.push('/login')
+}
+
+function openGuide() {
+  window.open(
+    'https://alidocs.dingtalk.com/i/nodes/QOG9lyrgJP29arbbUl10gwEQWzN67Mw4',
+    '_blank',
+    'noopener,noreferrer'
+  )
 }
 
 // 登录后检查授权委托书到期提醒
