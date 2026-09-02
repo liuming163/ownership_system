@@ -138,8 +138,8 @@ def get_auth_history(agent_id):
 @login_required
 def delete_agent(agent_id):
     """删除被代理人：删除前记录一行历史（action='delete'），历史 + 磁盘文件均保留。"""
-    err = agent_service.delete_agent(agent_id, operated_by=get_current_user())
-    if err:
+    ok, err = agent_service.delete_agent(agent_id, operated_by=get_current_user())
+    if not ok:
         return error(err)
     return success(message='删除成功')
 
