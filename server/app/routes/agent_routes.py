@@ -48,7 +48,7 @@ def create_agent():
     agent_name = request.form.get('agent_name', '').strip()
     license_file = request.files.get('license_file')
     period_end = request.form.get('period_end', '').strip()
-    is_long_term = request.form.get('is_long_term') == 'true'
+    is_long_term = request.form.get('is_long_term', '0') == '1'
     auth_file = request.files.get('auth_file')
     auth_expires_on = request.form.get('auth_expires_on', '').strip()
 
