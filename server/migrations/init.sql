@@ -60,3 +60,17 @@ CREATE TABLE works (
     FOREIGN KEY (company_id) REFERENCES companies(id),
     FOREIGN KEY (agent_id)   REFERENCES agents(id)
 ) ENGINE=InnoDB COMMENT '作品';
+
+-- 作品更新历史（每次 proof_file / other_files 变更时记录一行，旧文件保留在磁盘）
+-- 不带 FK 到 works：删除作品后历史仍保留（与"永久追溯"业务诉求一致）
+CREATE TABLE works_history (
+    id           INT AUTO_INCREMENT PRIMARY KEY COMMENT '主键ID',
+    work_id      INT          NOT NULL COMMENT '作品ID',
+    work_name    VARCHAR(255) NOT NULL COMMENT '作品名（冗余，作品删除后仍可识别）',
+    proof_file   VARCHAR(500) NULL     COMMENT '此版本的权属证明文件名（NULL 表示未变更）',
+    other_files  JSON         NULL     COMMENT '此版本的其他证明文件列表（NULL 表示未变更）',
+    replaced_at  DATETIME     DEFAULT CURRENT_TIMESTAMP COMMENT '替换时间',
+    uploaded_by  VARCHAR(100) COMMENT '操作人',
+    INDEX idx_work_id (work_id),
+    INDEX idx_replaced_at (replaced_at)
+) ENGINE=InnoDB COMMENT '作品文件变更历史（旧文件保留在磁盘）';

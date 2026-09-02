@@ -77,9 +77,10 @@
           {{ row.updated_at || '-' }}
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="180" align="center">
+      <el-table-column label="操作" width="220" align="center">
         <template #default="{ row }">
           <el-button type="primary" link size="small" @click="showUpdateDialog(row)">更新</el-button>
+          <el-button type="info" link size="small" @click="showHistory(row)">历史</el-button>
           <el-popconfirm v-if="userStore.canDelete" title="确定删除该作品？" @confirm="handleDelete(row.id)">
             <template #reference>
               <el-button type="danger" link size="small">删除</el-button>
@@ -181,6 +182,43 @@
       </template>
     </el-dialog>
 
+    <!-- 历史弹窗 -->
+    <el-dialog v-model="historyDialogVisible" title="权属文件历史" width="700px">
+      <el-table :data="historyData" border size="small">
+        <el-table-column label="权属证明" min-width="220">
+          <template #default="{ row }">
+            <el-button v-if="row.proof_file" type="primary" link size="small" @click="viewFile('权属证明', row.proof_file)">
+              {{ row.proof_file }}
+            </el-button>
+            <span v-else>-</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="其他证明" min-width="220">
+          <template #default="{ row }">
+            <template v-if="row.other_files && row.other_files.length > 0">
+              <el-button
+                v-for="(f, idx) in row.other_files"
+                :key="idx"
+                type="primary"
+                link
+                size="small"
+                style="display: block; text-align: left"
+                @click="viewFile('权属证明', f)"
+              >
+                {{ f }}
+              </el-button>
+            </template>
+            <span v-else>-</span>
+          </template>
+        </el-table-column>
+        <el-table-column prop="replaced_at" label="上传时间" width="180" />
+        <el-table-column prop="uploaded_by" label="操作人" width="100" />
+      </el-table>
+      <template #footer>
+        <el-button @click="historyDialogVisible = false">关闭</el-button>
+      </template>
+    </el-dialog>
+
     <!-- 打包体积限制弹窗 -->
     <el-dialog v-model="packageDialogVisible" title="打包下载" width="400px">
       <el-form label-width="160px">
@@ -224,7 +262,7 @@
 import { ref, reactive, onMounted, onUnmounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Document } from '@element-plus/icons-vue'
-import { getWorks, createWork, updateWork, deleteWork } from '../api/work'
+import { getWorks, createWork, updateWork, deleteWork, getWorkHistory } from '../api/work'
 import { getCompanies } from '../api/company'
 import { getAgents } from '../api/agent'
 import { useUserStore } from '../stores/user'
@@ -277,6 +315,10 @@ const updateProofUploadRef = ref(null)
 const updateOtherUploadRef = ref(null)
 const otherFilesDialogVisible = ref(false)
 const currentOtherFiles = ref([])
+
+// 历史
+const historyDialogVisible = ref(false)
+const historyData = ref([])
 const packageDialogVisible = ref(false)
 const maxPackageSize = ref(18)
 const packaging = ref(false)
@@ -575,6 +617,16 @@ function viewFile(folder, filename) {
 function showOtherFiles(row) {
   currentOtherFiles.value = row.other_files || []
   otherFilesDialogVisible.value = true
+}
+
+async function showHistory(row) {
+  const res = await getWorkHistory(row.id)
+  if (res.success) {
+    historyData.value = res.data
+    historyDialogVisible.value = true
+  } else {
+    ElMessage.error(res.error || '获取历史失败')
+  }
 }
 
 function handleSelectionChange(selection) {

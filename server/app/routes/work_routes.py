@@ -35,6 +35,13 @@ def get_work(work_id):
     return success(data)
 
 
+@work_bp.route('/<int:work_id>/history', methods=['GET'])
+@login_required
+def get_work_history(work_id):
+    data = work_service.get_work_history(work_id)
+    return success(data)
+
+
 @work_bp.route('', methods=['POST'])
 @login_required
 def create_work():

@@ -19,3 +19,7 @@ export function updateWork(id, formData) {
 export function deleteWork(id) {
   return request.delete(`/works/${id}`)
 }
+
+export function getWorkHistory(id) {
+  return request.get(`/works/${id}/history`)
+}
