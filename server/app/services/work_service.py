@@ -104,15 +104,16 @@ def create_work(company_id, agent_id, work_name, alias, proof_file, other_files,
 
         # 写入历史：记录本次上传的 proof_file / other_files（首个版本）
         session.execute(text("""
-            INSERT INTO works_history (work_id, work_name, proof_file, other_files, replaced_at, uploaded_by)
-            VALUES (:work_id, :work_name, :proof_file, :other_files, :replaced_at, :uploaded_by)
+            INSERT INTO works_history (work_id, work_name, proof_file, other_files, replaced_at, operated_by, action)
+            VALUES (:work_id, :work_name, :proof_file, :other_files, :replaced_at, :operated_by, :action)
         """), {
             'work_id': work_id,
             'work_name': work_name.strip(),
             'proof_file': proof_file,
             'other_files': other_json,
             'replaced_at': now,
-            'uploaded_by': created_by,
+            'operated_by': created_by,
+            'action': 'create',
         })
 
         session.commit()
@@ -170,15 +171,16 @@ def update_work(work_id, alias=None, proof_file=None, other_files=None, updated_
             # 历史记录保存"本次上传后的完整文件状态"（参照 agent_auth_history 的设计）
             if proof_changed or others_changed:
                 session.execute(text("""
-                    INSERT INTO works_history (work_id, work_name, proof_file, other_files, replaced_at, uploaded_by)
-                    VALUES (:work_id, :work_name, :proof_file, :other_files, :replaced_at, :uploaded_by)
+                    INSERT INTO works_history (work_id, work_name, proof_file, other_files, replaced_at, operated_by, action)
+                    VALUES (:work_id, :work_name, :proof_file, :other_files, :replaced_at, :operated_by, :action)
                 """), {
                     'work_id': work_id,
                     'work_name': existing['work_name'],
                     'proof_file': (proof_file if proof_changed else old_proof_file) or None,
                     'other_files': (new_other_json if others_changed else (json.dumps(old_other_files, ensure_ascii=False) if old_other_files else None)),
                     'replaced_at': now,
-                    'uploaded_by': updated_by,
+                    'operated_by': updated_by,
+                    'action': 'update',
                 })
 
             session.commit()
@@ -187,15 +189,32 @@ def update_work(work_id, alias=None, proof_file=None, other_files=None, updated_
     return get_work(work_id), None
 
 
-def delete_work(work_id):
+def delete_work(work_id, operated_by=None):
+    """删除作品：删除前先记录历史（action='delete'），works_history + 磁盘文件均保留。"""
     with get_db_session() as session:
-        existing = session.execute(text(
-            "SELECT id FROM works WHERE id = :id"
-        ), {'id': work_id}).first()
+        existing = session.execute(text("""
+            SELECT id, work_name, proof_file, other_files
+            FROM works WHERE id = :id
+        """), {'id': work_id}).mappings().first()
         if not existing:
             return False, '作品不存在'
 
-        # 删除 works 记录；works_history 与磁盘文件均保留（业务诉求：永久追溯）
+        now = datetime.now()
+        # 写入历史：记录删除前的完整状态（action='delete'）
+        session.execute(text("""
+            INSERT INTO works_history (work_id, work_name, proof_file, other_files, replaced_at, operated_by, action)
+            VALUES (:work_id, :work_name, :proof_file, :other_files, :replaced_at, :operated_by, :action)
+        """), {
+            'work_id': work_id,
+            'work_name': existing['work_name'],
+            'proof_file': existing['proof_file'],
+            'other_files': existing['other_files'],
+            'replaced_at': now,
+            'operated_by': operated_by,
+            'action': 'delete',
+        })
+
+        # 删除 works 记录；works_history + 磁盘文件均保留（业务诉求：永久追溯）
         session.execute(text("DELETE FROM works WHERE id = :id"), {'id': work_id})
         session.commit()
 
@@ -205,7 +224,7 @@ def delete_work(work_id):
 def get_work_history(work_id):
     with get_db_session() as session:
         rows = session.execute(text("""
-            SELECT id, work_id, work_name, proof_file, other_files, replaced_at, uploaded_by
+            SELECT id, work_id, work_name, proof_file, other_files, replaced_at, operated_by, action
             FROM works_history
             WHERE work_id = :work_id
             ORDER BY replaced_at DESC, id DESC
@@ -228,7 +247,8 @@ def _history_row_to_dict(row):
         'proof_file': row['proof_file'],
         'other_files': other_files,
         'replaced_at': row['replaced_at'].isoformat() if row['replaced_at'] else None,
-        'uploaded_by': row['uploaded_by'],
+        'operated_by': row['operated_by'],
+        'action': row['action'],
     }
 
 

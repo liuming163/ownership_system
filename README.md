@@ -76,15 +76,16 @@ npm run dev
 | 权属证明 | `权属证明_{作品名}_{uuid8}.{ext}` | `uploads/权属证明/` |
 | 其他证明文件 | `其他证明_{作品名}_{序号}_{uuid8}.{ext}` | `uploads/权属证明/` |
 
-更新授权委托书时，旧文件保留在磁盘，新文件以新截止日期命名，历史记录写入 `agent_auth_history` 表。
+更新授权委托书时，旧文件保留在磁盘，新文件以新截止日期命名，历史记录写入 `agent_auth_history` 表。删除被代理人 / 作品时同样记录一行 `action='delete'` 的历史，旧文件保留在磁盘，不再级联删除历史表记录。
 
 ## 数据库表结构
 
 ```
 companies          — 代理主体
 agents             — 被代理人（关联 companies）
-agent_auth_history — 授权委托书变更历史（关联 agents）
+agent_auth_history — 授权委托书变更历史（无 FK，被代理人删除后历史保留）
 works              — 作品（关联 companies + agents）
+works_history      — 作品文件变更历史（无 FK，作品删除后历史保留）
 ```
 
 ## 常见问题

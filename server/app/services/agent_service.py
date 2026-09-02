@@ -133,25 +133,28 @@ def create_agent(company_id, agent_name, license_file, period_end, is_long_term,
 
         # 同时记录到历史表
         session.execute(text("""
-            INSERT INTO agent_auth_history (agent_id, auth_file, auth_expires_on, uploaded_by)
-            VALUES (:agent_id, :auth_file, :auth_expires_on, :uploaded_by)
+            INSERT INTO agent_auth_history (agent_id, agent_name, auth_file, auth_expires_on, replaced_at, operated_by, action)
+            VALUES (:agent_id, :agent_name, :auth_file, :auth_expires_on, :replaced_at, :operated_by, :action)
         """), {
             'agent_id': agent_id,
+            'agent_name': normalized,
             'auth_file': auth_file,
             'auth_expires_on': auth_expires_on,
-            'uploaded_by': created_by,
+            'replaced_at': datetime.now(),
+            'operated_by': created_by,
+            'action': 'create',
         })
         session.commit()
 
     return get_agent(agent_id), None
 
 
-def update_agent_auth(agent_id, auth_file, auth_expires_on, uploaded_by):
+def update_agent_auth(agent_id, auth_file, auth_expires_on, operated_by):
     """更新授权委托书，旧记录保留到历史表。"""
     with get_db_session() as session:
         existing = session.execute(text(
-            "SELECT id FROM agents WHERE id = :id"
-        ), {'id': agent_id}).first()
+            "SELECT id, agent_name FROM agents WHERE id = :id"
+        ), {'id': agent_id}).mappings().first()
         if not existing:
             return None, '被代理人不存在'
 
@@ -162,15 +165,18 @@ def update_agent_auth(agent_id, auth_file, auth_expires_on, uploaded_by):
             WHERE id = :id
         """), {'auth_file': auth_file, 'auth_expires_on': auth_expires_on, 'id': agent_id})
 
-        # 追加历史记录
+        # 追加历史记录（action='update'）
         session.execute(text("""
-            INSERT INTO agent_auth_history (agent_id, auth_file, auth_expires_on, uploaded_by)
-            VALUES (:agent_id, :auth_file, :auth_expires_on, :uploaded_by)
+            INSERT INTO agent_auth_history (agent_id, agent_name, auth_file, auth_expires_on, replaced_at, operated_by, action)
+            VALUES (:agent_id, :agent_name, :auth_file, :auth_expires_on, :replaced_at, :operated_by, :action)
         """), {
             'agent_id': agent_id,
+            'agent_name': existing['agent_name'],
             'auth_file': auth_file,
             'auth_expires_on': auth_expires_on,
-            'uploaded_by': uploaded_by,
+            'replaced_at': datetime.now(),
+            'operated_by': operated_by,
+            'action': 'update',
         })
         session.commit()
 
@@ -181,25 +187,29 @@ def get_auth_history(agent_id):
     """获取授权委托书变更历史。"""
     with get_db_session() as session:
         rows = session.execute(text("""
-            SELECT id, auth_file, auth_expires_on, replaced_at, uploaded_by
+            SELECT id, agent_id, agent_name, auth_file, auth_expires_on, replaced_at, operated_by, action
             FROM agent_auth_history
             WHERE agent_id = :agent_id
             ORDER BY replaced_at DESC
         """), {'agent_id': agent_id}).mappings().all()
     return [{
         'id': r['id'],
+        'agent_id': r['agent_id'],
+        'agent_name': r['agent_name'],
         'auth_file': r['auth_file'],
         'auth_expires_on': r['auth_expires_on'].isoformat() if r['auth_expires_on'] else None,
         'replaced_at': r['replaced_at'].isoformat() if r['replaced_at'] else None,
-        'uploaded_by': r['uploaded_by'],
+        'operated_by': r['operated_by'],
+        'action': r['action'],
     } for r in rows]
 
 
-def delete_agent(agent_id):
-    from . import file_service
-    import os
-    from flask import current_app
-
+def delete_agent(agent_id, operated_by=None):
+    """删除被代理人：
+    - 删除前先记录一行历史（action='delete'）
+    - 不删 agent_auth_history 记录（FK 已移除）
+    - 不删磁盘文件（永久追溯）
+    """
     with get_db_session() as session:
         has_works = session.execute(text(
             "SELECT 1 FROM works WHERE agent_id = :id LIMIT 1"
@@ -207,26 +217,31 @@ def delete_agent(agent_id):
         if has_works:
             return False, '该被代理人下存在作品，无法删除'
 
-        # 获取被代理人信息（用于删除文件）
+        # 获取被代理人当前状态（用于写历史快照）
         agent = session.execute(text("""
-            SELECT agent_name, license_file, auth_file
+            SELECT agent_name, auth_file, auth_expires_on
             FROM agents WHERE id = :id
         """), {'id': agent_id}).mappings().first()
 
         if not agent:
             return False, '被代理人不存在'
 
-        # 获取所有历史授权文件
-        auth_history = session.execute(text("""
-            SELECT auth_file FROM agent_auth_history WHERE agent_id = :id
-        """), {'id': agent_id}).mappings().all()
+        now = datetime.now()
+        # 写入历史：action='delete'，记录删除前的完整状态
+        session.execute(text("""
+            INSERT INTO agent_auth_history (agent_id, agent_name, auth_file, auth_expires_on, replaced_at, operated_by, action)
+            VALUES (:agent_id, :agent_name, :auth_file, :auth_expires_on, :replaced_at, :operated_by, :action)
+        """), {
+            'agent_id': agent_id,
+            'agent_name': agent['agent_name'],
+            'auth_file': agent['auth_file'],
+            'auth_expires_on': agent['auth_expires_on'],
+            'replaced_at': now,
+            'operated_by': operated_by,
+            'action': 'delete',
+        })
 
-        # 先删历史记录
-        session.execute(text(
-            "DELETE FROM agent_auth_history WHERE agent_id = :id"
-        ), {'id': agent_id})
-
-        # 删除数据库记录
+        # 删除 agents 记录；agent_auth_history + 磁盘文件均保留（业务诉求：永久追溯）
         result = session.execute(text(
             "DELETE FROM agents WHERE id = :id"
         ), {'id': agent_id})
@@ -235,37 +250,6 @@ def delete_agent(agent_id):
         if result.rowcount == 0:
             return False, '被代理人不存在'
 
-    # 删除本地文件
-    upload_base = current_app.config['UPLOAD_FOLDER']
-
-    # 1. 删除被代理人营业执照
-    if agent['license_file']:
-        license_path = os.path.join(upload_base, '被代理人营业执照', agent['license_file'])
-        if os.path.exists(license_path):
-            try:
-                os.remove(license_path)
-            except OSError:
-                pass  # 文件删除失败不影响数据库删除结果
-
-    # 2. 删除当前授权委托书
-    if agent['auth_file']:
-        auth_path = os.path.join(upload_base, '授权委托书', agent['auth_file'])
-        if os.path.exists(auth_path):
-            try:
-                os.remove(auth_path)
-            except OSError:
-                pass
-
-    # 3. 删除历史授权委托书
-    for record in auth_history:
-        if record['auth_file']:
-            auth_path = os.path.join(upload_base, '授权委托书', record['auth_file'])
-            if os.path.exists(auth_path):
-                try:
-                    os.remove(auth_path)
-                except OSError:
-                    pass
-
     return True, None
 
 
@@ -273,17 +257,20 @@ def get_agent_auth_history(agent_id):
     """获取被代理人的授权委托书历史记录。"""
     with get_db_session() as session:
         rows = session.execute(text("""
-            SELECT auth_file, auth_expires_on, uploaded_by, replaced_at
+            SELECT agent_id, agent_name, auth_file, auth_expires_on, operated_by, replaced_at, action
             FROM agent_auth_history
             WHERE agent_id = :agent_id
             ORDER BY replaced_at DESC
         """), {'agent_id': agent_id}).mappings().all()
 
     return [{
+        'agent_id': row['agent_id'],
+        'agent_name': row['agent_name'],
         'auth_file': row['auth_file'],
         'auth_expires_on': row['auth_expires_on'].isoformat() if row['auth_expires_on'] else None,
-        'uploaded_by': row['uploaded_by'],
+        'operated_by': row['operated_by'],
         'replaced_at': row['replaced_at'].isoformat() if row['replaced_at'] else None,
+        'action': row['action'],
     } for row in rows]
 
 

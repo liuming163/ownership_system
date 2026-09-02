@@ -107,18 +107,23 @@
     </el-dialog>
 
     <!-- 历史弹窗 -->
-    <el-dialog v-model="historyDialogVisible" title="授权委托书历史" width="600px">
+    <el-dialog v-model="historyDialogVisible" title="授权委托书历史" width="700px">
       <el-table :data="historyData" border size="small">
+        <el-table-column label="操作类型" width="100" align="center">
+          <template #default="{ row }">
+            <el-tag :type="actionTagType(row.action)" size="small">{{ actionLabel(row.action) }}</el-tag>
+          </template>
+        </el-table-column>
         <el-table-column prop="auth_expires_on" label="授权截止日期" width="130" />
-        <el-table-column label="文件" min-width="200">
+        <el-table-column label="文件" min-width="220">
           <template #default="{ row }">
             <el-button type="primary" link size="small" @click="viewFile('授权委托书', row.auth_file)">
               {{ row.auth_file }}
             </el-button>
           </template>
         </el-table-column>
-        <el-table-column prop="replaced_at" label="上传时间" width="180" />
-        <el-table-column prop="uploaded_by" label="上传人" width="100" />
+        <el-table-column prop="replaced_at" label="操作时间" width="180" />
+        <el-table-column prop="operated_by" label="操作人" width="100" />
       </el-table>
     </el-dialog>
   </div>
@@ -260,6 +265,13 @@ async function showHistory(row) {
     historyData.value = res.data
     historyDialogVisible.value = true
   }
+}
+
+function actionTagType(action) {
+  return { create: 'success', update: 'primary', delete: 'danger' }[action] || 'info'
+}
+function actionLabel(action) {
+  return { create: '创建', update: '更新', delete: '删除' }[action] || action || '-'
 }
 
 async function handleDelete(id) {

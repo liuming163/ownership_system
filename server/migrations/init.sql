@@ -34,14 +34,16 @@ CREATE TABLE agents (
 ) ENGINE=InnoDB COMMENT '被代理人';
 
 -- 授权委托书变更历史
+-- 不带 FK 到 agents：删除被代理人后历史仍保留（与"永久追溯"业务诉求一致）
 CREATE TABLE agent_auth_history (
     id              INT AUTO_INCREMENT PRIMARY KEY COMMENT '主键ID',
     agent_id        INT          NOT NULL COMMENT '被代理人ID',
+    agent_name      VARCHAR(255) NULL     COMMENT '被代理人名称（冗余，被代理人删除后仍可识别）',
     auth_file       VARCHAR(500) NOT NULL COMMENT '授权委托书文件名',
     auth_expires_on DATE         NOT NULL COMMENT '此版本的截止日期',
     replaced_at     DATETIME     DEFAULT CURRENT_TIMESTAMP COMMENT '上传时间',
-    uploaded_by     VARCHAR(100) COMMENT '上传人',
-    FOREIGN KEY (agent_id) REFERENCES agents(id)
+    operated_by     VARCHAR(100) COMMENT '操作人（创建/更新/删除）',
+    action          VARCHAR(20)  NOT NULL DEFAULT 'update' COMMENT '操作类型: create/update/delete'
 ) ENGINE=InnoDB COMMENT '授权委托书变更历史';
 
 -- 作品
@@ -70,7 +72,8 @@ CREATE TABLE works_history (
     proof_file   VARCHAR(500) NULL     COMMENT '此版本的权属证明文件名（NULL 表示未变更）',
     other_files  JSON         NULL     COMMENT '此版本的其他证明文件列表（NULL 表示未变更）',
     replaced_at  DATETIME     DEFAULT CURRENT_TIMESTAMP COMMENT '替换时间',
-    uploaded_by  VARCHAR(100) COMMENT '操作人',
+    operated_by  VARCHAR(100) COMMENT '操作人（创建/更新/删除）',
+    action       VARCHAR(20)  NOT NULL DEFAULT 'update' COMMENT '操作类型: create/update/delete',
     INDEX idx_work_id (work_id),
     INDEX idx_replaced_at (replaced_at)
 ) ENGINE=InnoDB COMMENT '作品文件变更历史（旧文件保留在磁盘）';

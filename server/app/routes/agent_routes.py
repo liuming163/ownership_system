@@ -119,7 +119,7 @@ def update_auth(agent_id):
         agent_id=agent_id,
         auth_file=auth_filename,
         auth_expires_on=auth_expires_on,
-        uploaded_by=get_current_user(),
+        operated_by=get_current_user(),
     )
     if err:
         return error(err)
@@ -137,8 +137,8 @@ def get_auth_history(agent_id):
 @agent_bp.route('/<int:agent_id>', methods=['DELETE'])
 @login_required
 def delete_agent(agent_id):
-    """删除被代理人，同时删除数据库记录和本地文件。"""
-    err = agent_service.delete_agent(agent_id)
+    """删除被代理人：删除前记录一行历史（action='delete'），历史 + 磁盘文件均保留。"""
+    err = agent_service.delete_agent(agent_id, operated_by=get_current_user())
     if err:
         return error(err)
     return success(message='删除成功')

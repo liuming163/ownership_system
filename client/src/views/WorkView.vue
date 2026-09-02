@@ -183,8 +183,13 @@
     </el-dialog>
 
     <!-- 历史弹窗 -->
-    <el-dialog v-model="historyDialogVisible" title="权属文件历史" width="700px">
+    <el-dialog v-model="historyDialogVisible" title="权属文件历史" width="800px">
       <el-table :data="historyData" border size="small">
+        <el-table-column label="操作类型" width="100" align="center">
+          <template #default="{ row }">
+            <el-tag :type="actionTagType(row.action)" size="small">{{ actionLabel(row.action) }}</el-tag>
+          </template>
+        </el-table-column>
         <el-table-column label="权属证明" min-width="220">
           <template #default="{ row }">
             <el-button v-if="row.proof_file" type="primary" link size="small" @click="viewFile('权属证明', row.proof_file)">
@@ -211,8 +216,8 @@
             <span v-else>-</span>
           </template>
         </el-table-column>
-        <el-table-column prop="replaced_at" label="上传时间" width="180" />
-        <el-table-column prop="uploaded_by" label="操作人" width="100" />
+        <el-table-column prop="replaced_at" label="操作时间" width="180" />
+        <el-table-column prop="operated_by" label="操作人" width="100" />
       </el-table>
       <template #footer>
         <el-button @click="historyDialogVisible = false">关闭</el-button>
@@ -617,6 +622,13 @@ function viewFile(folder, filename) {
 function showOtherFiles(row) {
   currentOtherFiles.value = row.other_files || []
   otherFilesDialogVisible.value = true
+}
+
+function actionTagType(action) {
+  return { create: 'success', update: 'primary', delete: 'danger' }[action] || 'info'
+}
+function actionLabel(action) {
+  return { create: '创建', update: '更新', delete: '删除' }[action] || action || '-'
 }
 
 async function showHistory(row) {

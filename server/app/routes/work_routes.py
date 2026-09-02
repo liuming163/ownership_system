@@ -133,7 +133,7 @@ def update_work(work_id):
 @work_bp.route('/<int:work_id>', methods=['DELETE'])
 @login_required
 def delete_work(work_id):
-    ok, err = work_service.delete_work(work_id)
+    ok, err = work_service.delete_work(work_id, operated_by=get_current_user())
     if not ok:
         return error(err)
     return success(message='删除成功')
